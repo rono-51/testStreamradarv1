@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Clips - Kick</title>
+    <!-- CSS de Tailwind listo para producción -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.15/hls.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-6">
+
+    <div class="max-w-7xl mx-auto flex gap-6">
+
+        <!-- Sidebar de Streamers -->
+        <aside class="hidden md:block w-52 shrink-0">
+            <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Streamers rápidos</h2>
+            <div id="streamer-list" class="flex flex-col gap-1"></div>
+        </aside>
+
+        <div class="flex-1 min-w-0">
+            <!-- Header con Buscador -->
+            <header class="mb-8 border-b border-gray-800 pb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 class="text-3xl font-bold text-green-400 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-green-500 inline-block animate-pulse"></span>
+                        Dashboard de Clips - Kick
+                    </h1>
+                    <p class="text-gray-400 mt-1">Viendo clips de la semana ordenados por fecha</p>
+                </div>
+
+                <!-- Buscador Dinámico -->
+                <form id="search-form" class="flex w-full md:w-auto gap-2">
+                    <input type="text" id="search-input" value="daarick" placeholder="Nombre del streamer..."
+                           class="bg-gray-800 border border-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-green-500 w-full md:w-64 font-medium">
+                    <button type="submit" class="bg-green-500 hover:bg-green-600 text-gray-950 font-bold px-5 py-2 rounded-lg transition-colors">
+                        Buscar
+                    </button>
+                </form>
+            </header>
+
+            <!-- Estado de Carga -->
+            <div id="loading" class="text-center py-12">
+                <p class="text-xl text-gray-400 animate-bounce">Buscando clips en Kick...</p>
+            </div>
+
+            <!-- Mensaje de Error (Oculto por defecto) -->
+            <div id="error-msg" class="hidden bg-red-900/50 border border-red-500 text-red-200 p-4 rounded-lg mb-6">
+                No se pudieron cargar los clips. Verifica que el nombre del streamer esté bien escrito o que el canal tenga clips públicos creados esta semana.
+            </div>
+
+            <!-- Contenedor de Clips -->
+            <div id="clips-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Los clips se inyectarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Conservamos tu URL original del Worker
+        const WORKER_BASE_URL = 'https://kick-clips-proxy.clips-tt-ron21.workers.dev/';
+
+        const ALL_STREAMERS = [
+            "antonicratv","zullyy_cs","sideral","sachauzumaki",
+            "daarick","emetsuki","elglogloking","cristorata7",
+            "esbebote","jessybaby","jefrain","cirilotv","kingteka","luisormenoa27","butisito","tinaplays"
+        ];
+
+        const clipsContainer = document.getElementById('clips-container');
+        const loadingElement = document.getElementById('loading');
+        const errorElement = document.getElementById('error-msg');
+        const searchForm = document.getElementById('search-form');
+        const searchInput = document.getElementById('search-input');
+
+        function getRelativeTime(dateString) {
+            if (!dateString) return "Tiempo desconocido";
+
+            const createdDate = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - createdDate;
+
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+
+            if (diffMins < 1) return "Hace unos instantes";
+            if (diffMins < 60) return `Hace ${diffMins} min`;
+            if (diffHours < 24) return `Hace ${diffHours} ${diffHours === 1 ? 'hora' : 'horas'}`;
+            return `Hace ${diffDays} ${diffDays === 1 ? 'día' : 'días'}`;
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return "0:00";
+            const totalSeconds = Math.floor(seconds);
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = totalSeconds % 60;
+            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
+
+        // --- Sidebar de streamers ---
+        function renderStreamerList() {
+            const container = document.getElementById('streamer-list');
+            container.innerHTML = ALL_STREAMERS.map(name => `
+                <button data-streamer="${name}"
+                        onclick="selectStreamer('${name}')"
+                        class="streamer-btn text-left text-sm px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-green-400 transition-colors ${name === searchInput.value.trim().toLowerCase() ? 'bg-gray-800 text-green-400' : ''}">
+                    ${name}
+                </button>
+            `).join('');
+        }
+
+        function selectStreamer(name) {
+            searchInput.value = name;
+            document.querySelectorAll('.streamer-btn').forEach(btn => {
+                const isActive = btn.dataset.streamer === name;
+                btn.classList.toggle('bg-gray-800', isActive);
+                btn.classList.toggle('text-green-400', isActive);
+            });
+            fetchClips(name);
+        }
+
+        async function fetchClips(streamerName) {
+            loadingElement.classList.remove('hidden');
+            errorElement.classList.add('hidden');
+            clipsContainer.innerHTML = '';
+            Object.keys(hlsInstances).forEach(id => {
+                hlsInstances[id].destroy();
+                delete hlsInstances[id];
+            });
+
+            const finalUrl = `${WORKER_BASE_URL}?streamer=${encodeURIComponent(streamerName.trim().toLowerCase())}`;
+
+            try {
+                const response = await fetch(finalUrl);
+                if (!response.ok) throw new Error(`Error en el Worker: ${response.status}`);
+
+                const data = await response.json();
+                const clips = data.clips || data.data || [];
+
+                if (clips.length === 0) {
+                    clipsContainer.innerHTML = `<p class="text-gray-400 col-span-full text-center py-6">No se encontraron clips recientes para "${streamerName}" esta semana.</p>`;
+                    return;
+                }
+
+                renderClips(clips);
+            } catch (error) {
+                console.error("Error al obtener los clips:", error);
+                errorElement.classList.remove('hidden');
+            } finally {
+                loadingElement.classList.add('hidden');
+            }
+        }
+
+        function renderClips(clips) {
+            clips.forEach((clip, index) => {
+                const title = clip.title || 'Clip sin título';
+                const thumbnail = clip.thumbnail_url || 'https://via.placeholder.com/320x180?text=No+Thumbnail';
+                const videoSrc = clip.video_url;
+                const creator = clip.creator ? clip.creator.username : 'Usuario';
+                const category = clip.category ? clip.category.name : 'Sin categoría';
+                const views = clip.views || 0;
+                const timeAgo = getRelativeTime(clip.created_at);
+                const durationHtml = formatDuration(clip.duration);
+                const streamerChannel = (clip.channel && clip.channel.slug) ? clip.channel.slug : searchInput.value.trim().toLowerCase();
+                const kickClipUrl = `https://kick.com/${streamerChannel}/clips/${clip.id}`;
+                const videoId = `video-${index}`;
+
+                const clipCard = `
+                    <div class="bg-gray-800 rounded-xl overflow-hidden shadow-lg border border-gray-700 hover:border-green-500/50 transition-all duration-300 flex flex-col justify-between">
+                        <div>
+                            <div class="relative block aspect-video bg-gray-900 overflow-hidden group"
+                                 id="preview-${videoId}"
+                                 onmouseenter="handleHoverStart('${videoId}', '${videoSrc}')"
+                                 onmouseleave="handleHoverEnd('${videoId}')"
+                                 ontouchstart="handleTap('${videoId}', '${videoSrc}')">
+
+                                <video id="${videoId}" poster="${thumbnail}" loop playsinline
+                                       class="w-full h-full object-cover"></video>
+
+                                <!-- Botón de sonido -->
+                                <button onclick="toggleMute(event, '${videoId}')"
+                                        id="mute-btn-${videoId}"
+                                        class="hidden absolute bottom-2 left-2 z-30 bg-black/80 text-white text-xs w-7 h-7 rounded-full items-center justify-center">
+                                    🔊
+                                </button>
+
+                                <!-- Botón de velocidad -->
+                                <button onclick="cycleSpeed(event, '${videoId}')"
+                                        id="speed-btn-${videoId}"
+                                        class="hidden absolute bottom-2 left-11 z-30 bg-black/80 text-white text-xs font-mono font-bold h-7 px-2 rounded-full items-center justify-center">
+                                    1x
+                                </button>
+
+                                <span class="absolute top-2 left-2 bg-black/80 text-xs px-2 py-1 rounded font-mono text-white font-bold backdrop-blur-sm pointer-events-none">
+                                    ⏱️ ${durationHtml}
+                                </span>
+                                <span class="absolute bottom-2 right-2 bg-gray-900/80 text-xs px-2 py-1 rounded text-gray-300 pointer-events-none">
+                                    👀 ${views} vistas
+                                </span>
+                                <span class="absolute top-2 right-2 bg-purple-600/90 text-xs px-2 py-1 rounded text-white pointer-events-none">
+                                    🎮 ${category}
+                                </span>
+                            </div>
+                            <div class="p-4">
+                                <p class="block font-semibold text-lg text-white line-clamp-2">
+                                    ${title}
+                                </p>
+                                <p class="text-sm text-gray-400 mt-2">Creado por: <span class="text-gray-200 font-medium">${creator}</span></p>
+                            </div>
+                        </div>
+                        <div class="p-4 pt-0">
+                            <div class="text-xs text-gray-500 mb-3 flex justify-between items-center">
+                                <span>📅 Clip de la semana</span>
+                                <span class="text-green-400 font-medium">${timeAgo}</span>
+                            </div>
+                            <a href="${kickClipUrl}" target="_blank" class="w-full bg-gray-700 hover:bg-green-500 hover:text-gray-950 text-white font-bold py-2 px-4 rounded-lg transition-colors text-sm flex items-center justify-center gap-1">
+                                🚀 Abrir en Kick ↗
+                            </a>
+                        </div>
+                    </div>
+                `;
+                clipsContainer.innerHTML += clipCard;
+            });
+        }
+
+        // --- Reproducción de previews ---
+        const hlsInstances = {};
+        const SPEEDS = [1, 1.5, 2, 3];
+        const speedIndex = {}; // videoId -> índice actual en SPEEDS
+        let activeMobileVideoId = null; // solo un video suena a la vez en mobile
+
+        function loadVideo(videoId, src, attemptUnmuted) {
+            const video = document.getElementById(videoId);
+            if (!video) return;
+
+            const tryPlay = () => {
+                video.muted = !attemptUnmuted;
+                video.playbackRate = SPEEDS[speedIndex[videoId] || 0];
+                video.play().then(() => {
+                    updateMuteIcon(videoId, video.muted);
+                }).catch(() => {
+                    // el navegador bloqueó el audio: forzamos muted y reintentamos
+                    video.muted = true;
+                    updateMuteIcon(videoId, true);
+                    video.play().catch(() => {});
+                });
+            };
+
+            if (!hlsInstances[videoId]) {
+                if (Hls.isSupported()) {
+                    const hls = new Hls();
+                    hls.loadSource(src);
+                    hls.attachMedia(video);
+                    // Clave: esperar a que el manifest esté listo antes de reproducir,
+                    // si no el play() se ejecuta sin datos y falla en silencio.
+                    hls.on(Hls.Events.MANIFEST_PARSED, tryPlay);
+                    hlsInstances[videoId] = hls;
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    video.src = src; // Safari soporta HLS nativo
+                    video.addEventListener('loadedmetadata', tryPlay, { once: true });
+                }
+            } else {
+                tryPlay(); // ya estaba cargado, solo reanudar
+            }
+        }
+
+        // --- DESKTOP: hover ---
+        function handleHoverStart(videoId, src) {
+            if (window.matchMedia('(hover: none)').matches) return; // evita duplicar en touch
+            loadVideo(videoId, src, true); // intenta CON audio desde el inicio
+            const btn = document.getElementById(`mute-btn-${videoId}`);
+            btn.classList.remove('hidden');
+            btn.classList.add('flex');
+            const speedBtn = document.getElementById(`speed-btn-${videoId}`);
+            speedBtn.classList.remove('hidden');
+            speedBtn.classList.add('flex');
+        }
+
+        function handleHoverEnd(videoId) {
+            const video = document.getElementById(videoId);
+            if (video) video.pause();
+            document.getElementById(`mute-btn-${videoId}`).classList.add('hidden');
+            document.getElementById(`speed-btn-${videoId}`).classList.add('hidden');
+        }
+
+        // --- MOBILE: tap ---
+        function handleTap(videoId, src) {
+            if (!window.matchMedia('(hover: none)').matches) return; // evita duplicar en desktop
+
+            if (activeMobileVideoId && activeMobileVideoId !== videoId) {
+                const prevVideo = document.getElementById(activeMobileVideoId);
+                if (prevVideo) prevVideo.pause();
+                document.getElementById(`mute-btn-${activeMobileVideoId}`).classList.add('hidden');
+            }
+
+            const video = document.getElementById(videoId);
+            if (video.paused) {
+                loadVideo(videoId, src, true); // el tap es gesto válido: audio directo
+                const btn = document.getElementById(`mute-btn-${videoId}`);
+                btn.classList.remove('hidden');
+                btn.classList.add('flex');
+                const speedBtn = document.getElementById(`speed-btn-${videoId}`);
+                speedBtn.classList.remove('hidden');
+                speedBtn.classList.add('flex');
+                activeMobileVideoId = videoId;
+            } else {
+                video.pause();
+                document.getElementById(`mute-btn-${videoId}`).classList.add('hidden');
+                document.getElementById(`speed-btn-${videoId}`).classList.add('hidden');
+                activeMobileVideoId = null;
+            }
+        }
+
+        function toggleMute(event, videoId) {
+            event.stopPropagation();
+            const video = document.getElementById(videoId);
+            video.muted = !video.muted;
+            updateMuteIcon(videoId, video.muted);
+        }
+
+        function cycleSpeed(event, videoId) {
+            event.stopPropagation();
+            const video = document.getElementById(videoId);
+            const currentIndex = speedIndex[videoId] || 0;
+            const nextIndex = (currentIndex + 1) % SPEEDS.length;
+            speedIndex[videoId] = nextIndex;
+            if (video) video.playbackRate = SPEEDS[nextIndex];
+
+            const btn = document.getElementById(`speed-btn-${videoId}`);
+            if (btn) btn.textContent = `${SPEEDS[nextIndex]}x`;
+        }
+
+        function updateMuteIcon(videoId, muted) {
+            const btn = document.getElementById(`mute-btn-${videoId}`);
+            if (btn) btn.textContent = muted ? '🔇' : '🔊';
+        }
+
+        searchForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const targetStreamer = searchInput.value;
+            if (targetStreamer.trim() !== '') {
+                fetchClips(targetStreamer);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderStreamerList();
+            fetchClips(searchInput.value);
+        });
+    </script>
+</body>
+</html>
