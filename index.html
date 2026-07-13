@@ -1,344 +1,2047 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>StreamRadar - Panel de Monitoreo Automatizado</title>
-    <style>
-        :root {
-            --bg-color: #0b0e11;
-            --card-bg: #181f25;
-            --kick-green: #53fc18;
-            --text-color: #ffffff;
-            --accent-blue: #29b6f6;
-            --border-color: #2d3843;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>StreamRadar — Monitor de Virales</title>
 
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-        }
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="StreamRadar">
+<meta name="theme-color" content="#53fc18">
+<link rel="apple-touch-icon" href="assets/logos/streamradar_logo.png">
 
-        /* DISEÑO DE TRES COLUMNAS SEGÚN BOCETO */
-        .dashboard {
-            display: grid;
-            grid-template-columns: 280px 1fr 340px;
-            gap: 20px;
-            height: calc(100vh - 40px);
-        }
+<style>
+/* ════════════════════════════════════════════
+   TOKENS & ADAPTACIÓN AL TEMA DE TELEGRAM
+   Las variables CSS de Telegram se usan como base cuando el usuario
+   abre la app dentro de Telegram. En navegador externo, caen al
+   esquema oscuro original de StreamRadar.
+════════════════════════════════════════════ */
+:root {
+  /* Paleta original StreamRadar (fallbacks si no está en Telegram) */
+  --bg:        #080b0f;
+  --surface:   #111720;
+  --surface2:  #1a2330;
+  --border:    #1e2d3d;
+  --green:     #53fc18;
+  --green-dim: #1f5c08;
+  --blue:      #29b6f6;
+  --red:       #ef4444;
+  --orange:    #f59e0b;
+  --purple:    #a855f7;
+  --text:      #dde4ee;
+  --muted:     #556070;
+  --mono:      'JetBrains Mono','Fira Code','Courier New',monospace;
+  --radius:    8px;
+  --topbar-h:  50px;
+}
 
-        /* COLUMNA IZQUIERDA: LISTA DE STREAMERS ACTIVOS */
-        .sidebar-left {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 15px;
-            overflow-y: auto;
-        }
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
 
-        .sidebar-left h3 {
-            color: var(--kick-green);
-            font-size: 1rem;
-            text-transform: uppercase;
-            margin-top: 0;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 10px;
-        }
+/* ════════════════════════════════════════════
+   TOPBAR
+════════════════════════════════════════════ */
+.topbar {
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 200;
+  flex-shrink: 0;
+}
+.brand {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 800; font-size: 0.95rem;
+  color: var(--green); white-space: nowrap; flex-shrink: 0;
+}
+.live-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--red); flex-shrink: 0;
+  animation: blink 1.2s ease infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+.clock {
+  font-family: var(--mono); font-size: 0.78rem;
+  color: var(--muted); white-space: nowrap;
+}
+.topbar-right {
+  display: flex; align-items: center;
+  gap: 6px; margin-left: auto; flex-wrap: wrap;
+}
+.notif-badge {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 0.72rem; color: var(--muted); white-space: nowrap;
+}
+.notif-badge .nd { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.notif-badge.ok .nd { background: var(--green); }
+.notif-badge.no .nd { background: var(--red); }
 
-        .streamer-status-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 8px 10px;
-            margin-bottom: 6px;
-            background: #1f2831;
-            border-radius: 6px;
-            font-size: 0.9rem;
-        }
+/* Botones */
+.btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); padding: 5px 10px;
+  border-radius: var(--radius); font-size: 0.73rem;
+  cursor: pointer; white-space: nowrap;
+  transition: background .15s, border-color .15s, color .15s;
+  text-decoration: none;
+}
+.btn:hover { background: #1e2e40; border-color: var(--green); }
+.btn.on    { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+.btn.link  { color: var(--green); border-color: var(--green); }
 
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #64748b;
-        }
-        .status-dot.loading { background: #eab308; }
-        .status-dot.active { background: var(--kick-green); }
+/* ════════════════════════════════════════════
+   CONFIG PANEL
+════════════════════════════════════════════ */
+.config-panel {
+  display: none; flex-direction: column; gap: 10px;
+  padding: 14px; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.config-panel.open { display: flex; }
+.cfg-row {
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 10px;
+}
+.cfg-row label { color: var(--muted); flex: 1; }
+.cfg-row input[type=range] { flex: 1.5; accent-color: var(--green); }
+.cfg-row .cv {
+  font-family: var(--mono); font-size: 0.78rem;
+  color: var(--green); min-width: 42px; text-align: right;
+}
 
-        /* COLUMNA CENTRAL: SECCIÓN DE MONITOREO PRINCIPAL */
-        .main-monitoring {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            overflow-y: auto;
-            padding-right: 5px;
-        }
+/* ════════════════════════════════════════════
+   LAYOUT (3 columnas → colapsa en móvil)
+════════════════════════════════════════════ */
+.app {
+  display: grid;
+  grid-template-columns: 230px 1fr 290px;
+  height: calc(100vh - var(--topbar-h));
+  overflow: hidden;
+}
 
-        .monitoring-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 15px;
-            min-height: 100px;
-            position: relative;
-        }
+/* ── LEFT PANEL ── */
+.panel-l {
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.panel-l-head {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 8px; flex-shrink: 0;
+}
+.panel-l-head span {
+  font-size: 0.68rem; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--muted); font-weight: 700;
+}
+.panel-l-head .l-count {
+  font-family: var(--mono); font-size: 0.8rem;
+  color: var(--green); font-weight: 700;
+}
+.panel-l-body {
+  overflow-y: auto; flex: 1;
+  padding: 8px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.sel-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px; border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid transparent;
+  cursor: pointer; user-select: none;
+  transition: border-color .2s, background .15s;
+  font-size: 0.8rem;
+}
+.sel-item:hover { background: var(--surface2); }
+.sel-item.monitored { border-color: var(--green-dim); }
+.sel-item.spike-flash { animation: sflash .6s ease 3; }
+@keyframes sflash { 0%,100%{border-color:var(--red)} 50%{border-color:transparent} }
+.sel-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sel-rate { font-family: var(--mono); font-size: 0.68rem; color: var(--muted); white-space: nowrap; }
+.sel-rate.hot    { color: var(--orange); font-weight: 700; }
+.sel-rate.viral  { color: var(--red);    font-weight: 700; }
 
-        /* DISEÑO EXIGIDO: NOMBRE COMO ENLACE DIRECTO A KICK */
-        .monitoring-card h2 a {
-            color: var(--kick-green);
-            text-decoration: none;
-            font-size: 1.2rem;
-            font-weight: bold;
-        }
-        .monitoring-card h2 a:hover {
-            text-decoration: underline;
-        }
+/* Status dot */
+.sdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--muted); }
+.sdot.online   { background: var(--green); }
+.sdot.checking { background: var(--orange); animation: pulse-o 1s infinite alternate; }
+.sdot.offline  { background: var(--muted); }
+.sdot.error    { background: var(--red); }
+@keyframes pulse-o { from{opacity:.3} to{opacity:1} }
 
-        .chat-preview-box {
-            background: #0f141c;
-            border-radius: 6px;
-            padding: 10px;
-            margin-top: 10px;
-            font-family: monospace;
-            font-size: 0.85rem;
-            max-height: 120px;
-            overflow-y: auto;
-            color: #cbd5e1;
-        }
+/* Toggle switch */
+.toggle-wrap { display: flex; align-items: center; }
+.toggle { position: relative; width: 30px; height: 16px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; inset: 0;
+  background: #253040; border-radius: 16px;
+  transition: background .2s;
+  cursor: pointer;
+}
+.toggle-slider::after {
+  content: ''; position: absolute;
+  left: 2px; top: 2px;
+  width: 12px; height: 12px;
+  border-radius: 50%; background: var(--muted);
+  transition: transform .2s, background .2s;
+}
+.toggle input:checked + .toggle-slider { background: var(--green-dim); }
+.toggle input:checked + .toggle-slider::after { transform: translateX(14px); background: var(--green); }
 
-        /* COLUMNA DERECHA: ALERTAS GLOBALES Y BOTÓN GO */
-        .sidebar-right {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 15px;
-        }
+/* ── CENTER PANEL ── */
+.panel-c { overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.empty-state {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  height: 100%; gap: 12px;
+  color: var(--muted); font-size: 0.85rem; text-align: center;
+}
+.empty-state .big { font-size: 2.5rem; }
 
-        .alerts-panel {
-            flex-grow: 1;
-            overflow-y: auto;
-        }
+/* Monitoring card */
+.mcard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px; display: flex; flex-direction: column; gap: 9px;
+  transition: border-color .3s, box-shadow .3s;
+}
+.mcard.state-hot  { border-color: var(--orange); box-shadow: 0 0 14px rgba(245,158,11,.12); }
+.mcard.state-viral { border-color: var(--red); box-shadow: 0 0 20px rgba(239,68,68,.2); animation: vpulse .7s ease; }
+.mcard.state-muyviral { border-color: var(--purple); box-shadow: 0 0 28px rgba(168,85,247,.32); animation: vpulse .5s ease infinite alternate; }
+@keyframes vpulse { 0%{transform:scale(1)} 50%{transform:scale(1.01)} 100%{transform:scale(1)} }
 
-        .alerts-panel h3 {
-            color: var(--accent-blue);
-            font-size: 1rem;
-            text-transform: uppercase;
-            margin-top: 0;
-        }
+.mcard-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mcard-name { font-weight: 700; font-size: 0.92rem; color: var(--green); text-decoration: none; flex: 1; }
+.mcard-name:hover { text-decoration: underline; }
+.stream-timer {
+  font-family: var(--mono); font-size: 0.78rem;
+  background: rgba(83,252,24,.08);
+  border: 1px solid var(--green-dim);
+  color: var(--green); padding: 2px 8px;
+  border-radius: 20px; white-space: nowrap;
+}
+.vs-badge { font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 20px; letter-spacing: .5px; display: none; }
+.mcard.state-hot  .vs-badge.b-hot   { display:inline-block; background:rgba(245,158,11,.12); color:var(--orange); border:1px solid var(--orange); }
+.mcard.state-viral .vs-badge.b-viral { display:inline-block; background:rgba(239,68,68,.12);  color:var(--red);    border:1px solid var(--red); }
+.mcard.state-muyviral .vs-badge.b-muyviral { display:inline-block; background:rgba(168,85,247,.14); color:var(--purple); border:1px solid var(--purple); }
 
-        .alert-item {
-            background: #1f2831;
-            border-left: 4px solid var(--accent-blue);
-            padding: 8px;
-            margin-bottom: 8px;
-            border-radius: 0 6px 6px 0;
-            font-size: 0.85rem;
-        }
+/* Metrics grid */
+.mgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px,1fr)); gap: 7px; }
+.mbox  { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 8px; text-align: center; }
+.mbox label { display: block; font-size: 0.6rem; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 3px; }
+.mbox .v { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; }
+.c-green, .v.c-green   { color: var(--green);  }
+.c-blue, .v.c-blue     { color: var(--blue);   }
+.c-orange, .v.c-orange { color: var(--orange); }
+.c-red, .v.c-red       { color: var(--red);    }
+.c-purple, .v.c-purple { color: var(--purple); }
+.c-dim, .v.c-dim       { color: var(--muted);  }
 
-        .render-go-btn {
-            background: var(--kick-green);
-            color: #000;
-            border: none;
-            padding: 15px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            border-radius: 8px;
-            width: 100%;
-            cursor: pointer;
-            text-align: center;
-            text-decoration: none;
-            display: block;
-            box-sizing: border-box;
-            transition: transform 0.2s;
-        }
-        .render-go-btn:hover {
-            transform: scale(1.02);
-        }
-    </style>
+/* Sparkline */
+.spark { display: flex; align-items: flex-end; gap: 2px; height: 28px; }
+.spark-bar { flex: 1; background: var(--green-dim); border-radius: 2px 2px 0 0; min-height: 2px; transition: height .35s; }
+.spark-bar.pk { background: var(--red); }
+
+/* Emote tags */
+.emote-row { display: flex; flex-wrap: wrap; gap: 4px; min-height: 20px; }
+.etag { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-size: 0.7rem; color: var(--blue); font-family: var(--mono); }
+.etag .ec { color: var(--muted); margin-left: 3px; }
+.etag.emote-hot { border-color: var(--orange); color: var(--orange); }
+
+/* Unique users bar */
+.users-bar-wrap { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; }
+.users-bar-track { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.users-bar-fill  { height: 100%; background: var(--blue); border-radius: 2px; transition: width .4s; }
+
+/* ── Botón de alerta Telegram (exclusivo WebApp) ── */
+.tg-alert-btn {
+  display: block;
+  margin: 0 12px 4px;
+  padding: 10px;
+  background: var(--blue);
+  color: #000; text-align: center;
+  font-weight: 800; font-size: .8rem;
+  border-radius: var(--radius);
+  border: none; cursor: pointer;
+  text-transform: uppercase; letter-spacing: .5px;
+  flex-shrink: 0;
+  transition: opacity .15s;
+}
+.tg-alert-btn:hover { opacity: .88; }
+/* El botón siempre es visible para facilitar pruebas */
+
+/* ── RIGHT PANEL → VIRAL EVENTS DASHBOARD ── */
+.panel-r { border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.panel-r-head { padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.panel-r-head h3 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text); font-weight: 800; margin-bottom: 8px; }
+.evt-search {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 9px; border-radius: 6px; font-size: 0.76rem; margin-bottom: 6px;
+}
+.evt-filters { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+.evt-chip {
+  font-size: 0.64rem; padding: 3px 8px; border-radius: 20px; cursor: pointer;
+  background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+  text-transform: uppercase; letter-spacing: .4px; user-select: none;
+}
+.evt-chip.active { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+.evt-sort {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 5px 7px; border-radius: 6px; font-size: 0.72rem; width: 100%;
+}
+
+/* Lista de eventos */
+.evt-scroll { flex: 1; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.evt-empty { color: var(--muted); font-size: 0.76rem; text-align: center; padding: 30px 10px; }
+.evt-item {
+  background: var(--surface); border-left: 3px solid var(--orange);
+  border-radius: 0 8px 8px 0; padding: 9px 10px; cursor: pointer;
+  animation: slideIn .22s ease; flex-shrink: 0; transition: background .15s;
+}
+.evt-item:hover { background: var(--surface2); }
+.evt-item.tp-viral     { border-left-color: var(--red); }
+.evt-item.tp-muyviral  { border-left-color: var(--purple); }
+.evt-item.estado-revisado { opacity: 0.55; }
+@keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+.evt-row1 { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.evt-name { font-weight: 700; color: var(--green); font-size: 0.8rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evt-score { font-family: var(--mono); font-weight: 800; font-size: 0.85rem; }
+.evt-row2 { display: flex; justify-content: space-between; font-size: 0.66rem; color: var(--muted); font-family: var(--mono); }
+.evt-hip { font-size: 0.72rem; color: var(--text); margin-top: 3px; }
+.evt-detail {
+  margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--border);
+  font-size: 0.7rem; color: var(--muted); display: flex; flex-direction: column; gap: 3px;
+}
+.evt-detail b { color: var(--text); }
+.evt-reasons { margin: 2px 0 0 14px; padding: 0; }
+.evt-reasons li { margin-bottom: 1px; }
+.evt-mark { margin-top: 6px; align-self: flex-start; }
+
+/* Render button */
+.render-link {
+  display: block; margin: 8px 12px 12px;
+  padding: 11px; background: var(--green);
+  color: #000; text-align: center; text-decoration: none;
+  font-weight: 800; font-size: .85rem; border-radius: var(--radius);
+  text-transform: uppercase; letter-spacing: .5px; flex-shrink: 0;
+  transition: opacity .15s;
+}
+.render-link:hover { opacity: .88; }
+
+/* ════════════════════════════════════════════
+   SCORE CHART (estilo TradingView, sin velas)
+════════════════════════════════════════════ */
+.score-chart-wrap { position: relative; }
+.score-chart { width: 100%; height: 74px; display: block; }
+.score-chart .grid-line     { stroke: var(--border); stroke-width: 1; }
+.score-chart .thr-hot       { stroke: var(--orange); stroke-width: 1; stroke-dasharray: 3 3; opacity: .6; }
+.score-chart .thr-viral     { stroke: var(--red); stroke-width: 1; stroke-dasharray: 3 3; opacity: .6; }
+.score-chart .thr-muyviral  { stroke: var(--purple); stroke-width: 1; stroke-dasharray: 3 3; opacity: .6; }
+.score-chart .event-zone    { fill: var(--orange); opacity: .10; }
+.score-chart .event-zone.z-viral    { fill: var(--red); opacity: .12; }
+.score-chart .event-zone.z-muyviral { fill: var(--purple); opacity: .14; }
+.score-chart .score-line    { fill: none; stroke: var(--green); stroke-width: 1.6; }
+.score-chart .score-area    { fill: var(--green); opacity: .08; }
+.score-chart .alert-dot     { fill: var(--red); }
+.score-chart .peak-dot      { fill: var(--purple); }
+.score-chart .baseline-line { stroke: var(--blue); stroke-width: 1; stroke-dasharray: 1 3; opacity: .55; }
+
+/* ════════════════════════════════════════════
+   CARD SIMPLIFICADA + DETALLE EXPANDIBLE
+════════════════════════════════════════════ */
+.mcard-simple { display: flex; align-items: center; gap: 10px; }
+.mcard-score-big {
+  font-family: var(--mono); font-weight: 800; font-size: 1.7rem; line-height: 1;
+  min-width: 52px; text-align: center;
+}
+.mcard-mainstats { display: flex; gap: 14px; font-size: 0.74rem; color: var(--muted); }
+.mcard-mainstats b { color: var(--text); font-family: var(--mono); }
+.level-badge {
+  font-size: 0.62rem; font-weight: 800; padding: 3px 8px; border-radius: 20px;
+  text-transform: uppercase; letter-spacing: .5px; white-space: nowrap;
+}
+.level-badge.lv-normal   { background: rgba(85,96,112,.15);  color: var(--muted); }
+.level-badge.lv-posible  { background: rgba(245,158,11,.14); color: var(--orange); }
+.level-badge.lv-viral    { background: rgba(239,68,68,.14);  color: var(--red); }
+.level-badge.lv-muyviral { background: rgba(168,85,247,.16); color: var(--purple); }
+.detail-toggle {
+  align-self: flex-start; background: none; border: none; color: var(--muted);
+  font-size: 0.68rem; cursor: pointer; padding: 2px 0; text-decoration: underline;
+}
+.detail-toggle:hover { color: var(--green); }
+.mcard-detail { display: none; flex-direction: column; gap: 9px; }
+.mcard-detail.open { display: flex; }
+.audio-toggle {
+  font-size: 0.68rem; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+}
+.audio-toggle.on { background: rgba(41,182,246,.12); border-color: var(--blue); color: var(--blue); }
+.hip-box { background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; font-size: 0.74rem; }
+.hip-box .hip-title { color: var(--green); font-weight: 700; margin-bottom: 2px; }
+.hip-box .hip-conf { color: var(--muted); font-family: var(--mono); }
+
+/* ════════════════════════════════════════════
+   SCROLLBARS
+════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ════════════════════════════════════════════
+   RESPONSIVE
+════════════════════════════════════════════ */
+@media (max-width: 1080px) { .app { grid-template-columns: 200px 1fr 260px; } }
+@media (max-width: 860px) {
+  html, body { overflow: auto; }
+  .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; height: auto; overflow: visible; }
+  .panel-l { border-right: none; border-bottom: 1px solid var(--border); max-height: 260px; }
+  .panel-c { height: auto; overflow: visible; }
+  .panel-r { border-left: none; border-top: 1px solid var(--border); max-height: 380px; }
+  .panel-r .evt-scroll { max-height: 220px; }
+}
+@media (max-width: 480px) {
+  .topbar { height: auto; min-height: var(--topbar-h); flex-wrap: wrap; padding: 8px; }
+  .clock  { display: none; }
+  .mgrid  { grid-template-columns: repeat(3, 1fr); }
+  .mbox .v { font-size: .9rem; }
+  .btn { padding: 5px 8px; font-size: .7rem; }
+}
+</style>
 </head>
 <body>
 
-    <div class="dashboard">
-        
-        <div class="sidebar-left">
-            <h3>Know Streamers</h3>
-            <div id="streamers-list-status">
-                </div>
+
+<!-- ═══════════ TOPBAR ═══════════ -->
+<div class="topbar">
+  <div class="brand"><span class="live-dot"></span>STREAMRADAR</div>
+  <div class="clock" id="clock">--:--:-- PET</div>
+  <div class="topbar-right">
+    <div class="notif-badge" id="notif-badge">
+      <span class="nd"></span><span id="notif-label">Notif. OFF</span>
+    </div>
+    <button class="btn" id="btn-notif" onclick="requestNotif()">🔔 Activar</button>
+    <button class="btn" id="btn-wl"    onclick="toggleWakeLock()">🔆 Pantalla</button>
+    <button class="btn" id="btn-cfg"   onclick="toggleCfg()">⚙ Config</button>
+    <a class="btn link" href="render.html">Render ➔</a>
+  </div>
+</div>
+
+<!-- ═══════════ CONFIG PANEL ═══════════ -->
+<div class="config-panel" id="cfg-panel">
+  <div class="cfg-row">
+    <label>Umbral HOT (Viral Score)</label>
+    <input type="range" id="c-hot"   min="20" max="90"  value="40" step="5">
+    <span class="cv" id="cv-hot">40</span>
+  </div>
+  <div class="cfg-row">
+    <label>Umbral VIRAL (Viral Score)</label>
+    <input type="range" id="c-viral" min="40" max="100" value="70" step="5">
+    <span class="cv" id="cv-viral">70</span>
+  </div>
+  <div class="cfg-row">
+    <label>Umbral MUY VIRAL (Viral Score)</label>
+    <input type="range" id="c-muyviral" min="70" max="100" value="88" step="2">
+    <span class="cv" id="cv-muyviral">88</span>
+  </div>
+  <div class="cfg-row">
+    <label>Cooldown entre alertas (s)</label>
+    <input type="range" id="c-cd"    min="10" max="120" value="45" step="5">
+    <span class="cv" id="cv-cd">45s</span>
+  </div>
+  <div class="cfg-row">
+    <label>Ventana emotes (s)</label>
+    <input type="range" id="c-ew"    min="30" max="120" value="60" step="10">
+    <span class="cv" id="cv-ew">60s</span>
+  </div>
+  <div class="cfg-row" style="flex-direction:column;align-items:stretch;gap:6px">
+    <label style="flex:none">Palabras/emotes peruanos personalizados (novedad + hype)</label>
+    <div style="display:flex;gap:6px">
+      <input type="text" id="c-hypeword" placeholder="ej: pipipi, xdxd, clipeen…"
+             style="flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+                    padding:6px 8px;border-radius:6px;font-size:.78rem">
+      <button class="btn" onclick="addCustomHypeWord()">＋ Agregar</button>
+    </div>
+    <div id="hype-tags" style="display:flex;flex-wrap:wrap;gap:4px;font-size:.68rem;color:var(--green)"></div>
+  </div>
+</div>
+
+<!-- ═══════════ APP LAYOUT ═══════════ -->
+<div class="app">
+
+  <!-- LEFT: selector de streamers -->
+  <div class="panel-l">
+    <div class="panel-l-head">
+      <span>Streamers <span id="online-count" class="l-count">0</span> online</span>
+      <button class="btn" style="font-size:.68rem;padding:3px 7px"
+              onclick="toggleAllMonitored()">Todos</button>
+    </div>
+    <div class="panel-l-body" id="sel-list"></div>
+  </div>
+
+  <!-- CENTER: cards de monitoreo activo -->
+  <div class="panel-c" id="monitor-area">
+    <div class="empty-state" id="empty-msg">
+      <div class="big">📡</div>
+      <div>Verificando streams en vivo…</div>
+      <div style="color:var(--muted);font-size:.78rem">Activa el toggle de un streamer online para monitorearlo</div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Viral Events Dashboard — biblioteca de momentos virales -->
+  <div class="panel-r">
+    <div class="panel-r-head">
+      <h3>📼 Viral Events Dashboard</h3>
+      <input type="text" class="evt-search" id="evt-search" placeholder="Buscar por streamer o tipo…"
+             oninput="renderEventsDashboard()">
+      <div class="evt-filters" id="evt-filters">
+        <span class="evt-chip active" data-f="todos"    onclick="setEventFilter('todos')">Todos</span>
+        <span class="evt-chip"        data-f="hot"       onclick="setEventFilter('hot')">Posible</span>
+        <span class="evt-chip"        data-f="viral"     onclick="setEventFilter('viral')">Viral</span>
+        <span class="evt-chip"        data-f="muyviral"  onclick="setEventFilter('muyviral')">Muy Viral</span>
+        <span class="evt-chip"        data-f="nuevo"     onclick="setEventFilter('nuevo')">Sin revisar</span>
+      </div>
+      <select class="evt-sort" id="evt-sort" onchange="renderEventsDashboard()">
+        <option value="hora">Ordenar: más recientes</option>
+        <option value="score">Ordenar: score máximo</option>
+        <option value="duracion">Ordenar: duración</option>
+        <option value="confianza">Ordenar: confianza</option>
+      </select>
+    </div>
+    <div class="evt-scroll" id="evt-scroll"></div>
+    <a class="render-link" href="render.html">Render GO ➔</a>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════
+   LISTA DE STREAMERS
+══════════════════════════════════════════════ */
+const ALL_STREAMERS = [
+  "antonicratv","zullyy_cs","sideral","sachauzumaki",
+  "daarick","emetsuki","elglogloking","cristorata7",
+  "esbebote","jessybaby","jefrain","cirilotv","kingteka","luisormenoa27","butisito", "tinaplays", "Francovidalalcalde"
+];
+
+/* ══════════════════════════════════════════════
+   CONFIGURACIÓN (sliders)
+══════════════════════════════════════════════ */
+let CFG = {
+  hotScore:      40,
+  viralScore:    70,
+  muyViralScore: 88,
+  cooldownMs:    45000,
+  emoteWindow:   60000,
+  audioActivationScore: 55   // el análisis de audio solo se muestrea si el Score supera esto
+};
+
+/* ══════════════════════════════════════════════
+   ESTADO GLOBAL
+══════════════════════════════════════════════ */
+const streams = {};
+let viralEvents = [];              // biblioteca de eventos detectados (Viral Events Dashboard)
+let eventFilter = 'todos';
+let eventCounter = 0;
+let wakeLockSentinel = null;
+let monitorWorker = null;
+let workerTick = 0;
+
+/* ══════════════════════════════════════════════
+   RELOJ PERÚ (UTC-5 fijo)
+   ─────────────────────────────────────────────
+   BUG CORREGIDO: la versión anterior sumaba el offset de zona horaria
+   LOCAL del navegador a Date.now() (que ya es un epoch UTC absoluto,
+   no necesita esa conversión) y luego leía el resultado con getHours()
+   (que vuelve a aplicar el offset local del navegador). Eso producía
+   un desfase que solo "cuadraba" si el navegador estaba en UTC+0, y
+   en cualquier otro caso generaba horas y tiempos de stream negativos
+   o desfasados ~1h+ dependiendo de la zona del visitante.
+   Ahora: se calcula el instante UTC-5 real (Perú no usa horario de
+   verano) y se lee SIEMPRE con getters UTC, sin depender de la zona
+   horaria del navegador que abre la app.
+══════════════════════════════════════════════ */
+function peruNow() {
+  return new Date(Date.now() - 5 * 3600000);
+}
+function fmtClock(d) { return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} PET`; }
+function fmtTime(d)  { return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`; }
+function pad(n) { return String(n).padStart(2, '0'); }
+function fmtHMS(ms) {
+  const s = Math.floor(Math.max(0, ms) / 1000); // nunca negativo
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sc = s % 60;
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(sc)}` : `${pad(m)}:${pad(sc)}`;
+}
+function refreshClock() { document.getElementById('clock').textContent = fmtClock(peruNow()); }
+
+/* ══════════════════════════════════════════════
+   NOTIFICACIONES (solo en modo navegador)
+══════════════════════════════════════════════ */
+function updateNotifUI() {
+  const badge = document.getElementById('notif-badge');
+  const label = document.getElementById('notif-label');
+  const btn   = document.getElementById('btn-notif');
+  if (!('Notification' in window)) { label.textContent = 'No soportado'; btn?.remove(); return; }
+  if (Notification.permission === 'granted') {
+    badge.className = 'notif-badge ok'; label.textContent = 'Notif. ON ✓'; btn.style.display = 'none';
+  } else if (Notification.permission === 'denied') {
+    badge.className = 'notif-badge no'; label.textContent = 'Bloqueado'; btn.style.display = 'none';
+  } else {
+    badge.className = 'notif-badge'; label.textContent = 'Notif. OFF'; btn.style.display = '';
+  }
+}
+function requestNotif() { Notification.requestPermission().then(updateNotifUI); }
+
+function pushNotif(name, tipo, score, mpm) {
+  if (Notification.permission !== 'granted') return;
+  const emoji = tipo === 'VIRAL' ? '🔥🔥' : '🔥';
+  new Notification(`${emoji} ${tipo} — ${name.toUpperCase()}`, {
+    body: `Score: ${score} · ${mpm} msg/min\n${fmtTime(peruNow())} PET`,
+    icon: 'assets/logos/streamradar_logo.png',
+    tag:  `sr-${name}`,
+    silent: false
+  });
+}
+
+/* ══════════════════════════════════════════════
+   WAKE LOCK
+══════════════════════════════════════════════ */
+async function toggleWakeLock() {
+  const btn = document.getElementById('btn-wl');
+  if (wakeLockSentinel) {
+    await wakeLockSentinel.release().catch(() => {});
+    wakeLockSentinel = null;
+    btn.textContent = '🔆 Pantalla'; btn.classList.remove('on');
+  } else {
+    try {
+      wakeLockSentinel = await navigator.wakeLock.request('screen');
+      btn.textContent = '🔆 ON ✓'; btn.classList.add('on');
+      wakeLockSentinel.addEventListener('release', () => {
+        wakeLockSentinel = null; btn.textContent = '🔆 Pantalla'; btn.classList.remove('on');
+      });
+    } catch { btn.textContent = '🔆 N/A'; }
+  }
+}
+
+/* ══════════════════════════════════════════════
+   AUDIO
+══════════════════════════════════════════════ */
+let _actx = null;
+function getActx() {
+  if (!_actx) _actx = new (window.AudioContext || window.webkitAudioContext)();
+  return _actx;
+}
+document.addEventListener('click', () => getActx(), { once: true });
+
+function beep(freq, dur, vol = 0.07) {
+  try {
+    const ctx  = getActx();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + dur);
+  } catch {}
+}
+function playAlert(tipo) {
+  if (tipo === 'VIRAL') {
+    beep(1047,.09,.1); setTimeout(()=>beep(1319,.09,.1),100); setTimeout(()=>beep(1568,.18,.12),200);
+  } else { beep(880,.15,.08); }
+}
+function speak(name, tipo, mpm) {
+  if (!window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(
+    `${tipo === 'VIRAL' ? 'Viral' : 'Chat activo'} en ${name}. ${mpm} mensajes por minuto.`
+  );
+  u.lang = 'es-ES'; u.rate = 1.1; u.volume = .9;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
+function vib(tipo) { navigator.vibrate?.(tipo === 'VIRAL' ? [200,100,200,100,400] : [180,80,180]); }
+
+/* ══════════════════════════════════════════════
+   CONFIG SLIDERS
+══════════════════════════════════════════════ */
+function toggleCfg() { document.getElementById('cfg-panel').classList.toggle('open'); }
+const cfgMap = {
+  'c-hot':     ['cv-hot',      (v) => { CFG.hotScore      = +v; }, v => v],
+  'c-viral':   ['cv-viral',    (v) => { CFG.viralScore    = +v; }, v => v],
+  'c-muyviral':['cv-muyviral', (v) => { CFG.muyViralScore = +v; }, v => v],
+  'c-cd':      ['cv-cd',       (v) => { CFG.cooldownMs    = +v * 1000; }, v => v + 's'],
+  'c-ew':      ['cv-ew',       (v) => { CFG.emoteWindow   = +v * 1000; }, v => v + 's'],
+};
+Object.entries(cfgMap).forEach(([id, [dispId, setter, fmt]]) => {
+  document.getElementById(id).addEventListener('input', function() {
+    document.getElementById(dispId).textContent = fmt(this.value);
+    setter(this.value);
+  });
+});
+
+/* ══════════════════════════════════════════════
+   DETECCIÓN DE EMOTES
+══════════════════════════════════════════════ */
+const EMOTE_RE = /\b([A-Z][a-zA-Z]{1,15}|[A-Z]{2,10})\b/g;
+const ES_FILTER = new Set([
+  'La','El','Los','Las','De','Del','En','Un','Una','Y','O','Que',
+  'Se','Es','Con','Por','Para','Lo','Le','Me','Te','Si','No','Mi','Su',
+  'Al','Yo','Tu','Ni','Ya','Mas','Pero','Como','Muy','Bien','Hola',
+  'Jaja','Jajaja','Gg','Xd','Ok','Np','Lol','Wp','Ez','Rip','Pog'
+]);
+function extractEmotes(text) {
+  const found = [];
+  let m;
+  EMOTE_RE.lastIndex = 0;
+  while ((m = EMOTE_RE.exec(text)) !== null) {
+    const w = m[1];
+    if (!ES_FILTER.has(w)) found.push(w);
+  }
+  return found;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   MOTOR DE DETECCIÓN DE VIRALIDAD — v2
+   ────────────────────────────────────────────────────────────────────
+   Rediseño completo del sistema de spikes. Objetivo: máxima precisión,
+   mínimos falsos positivos, 100% determinístico (sin IA/ML), adaptado
+   al público peruano y a streamers de cualquier tamaño (30 o 20 000
+   espectadores usan la MISMA lógica porque todo se mide de forma
+   relativa a la propia línea base de cada canal, nunca en absoluto).
+
+   Cadencia: el motor analiza cada canal cada 5 segundos (workerTick % 5),
+   tal como pide la arquitectura objetivo. El renderizado de UI usa los
+   valores ya calculados (s.m), así que no repite trabajo.
+
+   Estructuras de datos (por streamer, ver buildSelector):
+     - msgBuffer   : cola deslizante de 60s {ts,userId}      → O(msgs/60s)
+     - textBuffer  : buffer que se DRENA cada 5s {userId,text} → O(msgs/5s)
+     - win5History : histórico acotado de conteos por ventana de 5s
+                     (máx. 360 muestras = 30 min) → percentil/tendencia
+     - wordHistFreq: mapa de frecuencia histórica de palabras (memoria
+                     de vocabulario "normal" del canal, para detectar
+                     novedad léxica real)
+   Todas las colas son acotadas (se podan cada ciclo), por lo que el
+   costo de memoria y CPU por streamer es O(1) respecto a la duración
+   del stream — así el sistema escala linealmente con la cantidad de
+   streamers monitoreados (apto para 24/7 con decenas de canales).
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Diccionario base de hype peruano (editable desde la app, ver
+   addCustomHypeWord — se guarda en localStorage y se mezcla en runtime
+   sin tocar código) ── */
+const PERU_HYPE_BASE = [
+  'xd','xdd','xddd','xdxd','jaja','jajaj','jajaja','jajajaja','oe','csmr',
+  'ptm','pipipi','yafue','ya fue','clipeen','clipealo','clipealo ya','noo',
+  'noooo','gaaaa','causa','mano','webon','we','pe causa','xq','tqm','ntc',
+  'chibolo','asu','asuu','bro','crack','papu','pilas','fua','ea','oye',
+  'chevere','bacan','lpm','concha','tremendo','tremenda','grande','papá',
+  'no manches','sksksk','uwu','ggwp','gg','ez'
+];
+function loadCustomHype() {
+  try { return JSON.parse(localStorage.getItem('sr_custom_hype') || '[]'); }
+  catch { return []; }
+}
+let CUSTOM_HYPE = loadCustomHype();
+function buildHypeSet() {
+  return new Set([...PERU_HYPE_BASE, ...CUSTOM_HYPE].map(w => w.toLowerCase().trim()).filter(Boolean));
+}
+let HYPE_SET = buildHypeSet();
+function renderHypeTags() {
+  const box = document.getElementById('hype-tags');
+  if (!box) return;
+  box.innerHTML = CUSTOM_HYPE.map(w => `#${w}`).join('  ') || '<span style="color:var(--muted)">sin palabras personalizadas aún</span>';
+}
+function addCustomHypeWord() {
+  const input = document.getElementById('c-hypeword');
+  const word  = (input.value || '').toLowerCase().trim();
+  if (!word) return;
+  if (!CUSTOM_HYPE.includes(word)) {
+    CUSTOM_HYPE.push(word);
+    localStorage.setItem('sr_custom_hype', JSON.stringify(CUSTOM_HYPE));
+    HYPE_SET = buildHypeSet();
+  }
+  input.value = '';
+  renderHypeTags();
+}
+
+/* ── Tokenizador ligero para español/jerga peruana ──
+   Normaliza alargamientos ("noooooo" → "noo", "jajajaja" se mantiene
+   porque alterna caracteres) para agrupar variantes de una misma
+   expresión y no tratarlas como palabras "nuevas" distintas. ── */
+const WORD_STOP = new Set([
+  'la','el','los','las','de','del','en','un','una','y','o','que','se','es',
+  'con','por','para','lo','le','me','te','si','no','mi','su','al','yo','tu',
+  'ni','ya','mas','pero','como','muy','esta','este'
+]);
+function normalizeElongation(w) { return w.replace(/(.)\1{2,}/g, '$1$1'); }
+function tokenize(text) {
+  if (!text) return [];
+  const raw = text.toLowerCase().match(/[a-záéíóúñü]{2,}/g) || [];
+  return raw.map(normalizeElongation).filter(w => !WORD_STOP.has(w));
+}
+
+/* ── Utilidades estadísticas ── */
+function ewma(prev, sample, alpha) { return prev + alpha * (sample - prev); }
+function mean(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0) / arr.length : 0; }
+function stddev(arr) {
+  if (arr.length < 2) return 0;
+  const m = mean(arr);
+  return Math.sqrt(mean(arr.map(x => (x - m) ** 2)));
+}
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+/* ══════════════════════════════════════════════════════════════════
+   INTERPRETACIÓN DEL EVENTO (sección 7 del pedido)
+   ────────────────────────────────────────────────────────────────
+   Reglas heurísticas (NO IA) que combinan chat + emotes + energía de
+   audio + persistencia + velocidad + diversidad para proponer una
+   hipótesis de "qué ocurrió", con nivel de confianza y razones.
+   ══════════════════════════════════════════════════════════════ */
+const CAT_WORDS = {
+  humor:        new Set(['jaja','jajaja','jajajaja','jajaj','xd','xdd','xddd','lol','lpm']),
+  hypeColectivo: new Set(['gg','ggwp','wp','hype','vamos','vamoo','arriba','crack','papu','bacan','chevere','fua']),
+  celebracion:  new Set(['ganamos','gano','goool','gol','victoria','campeon','grande','papá','tremendo','tremenda']),
+  derrota:      new Set(['perdimos','perdio','rip','ntc','fail','uff','concha']),
+  discusion:    new Set(['pero','mentira','falso','opino','pelea','discutan','no es cierto']),
+  donacion:     new Set(['dona','donacion','suscri','sub','regalo','bits','prime','gift']),
+  reaccionChat: new Set(['wow','wtf','asu','asuu','oe','csmr','ptm','noo','noooo','sksksk'])
+};
+
+function interpretEvent(name, m) {
+  const s = streams[name];
+  const hits = s.eventWordHits || {};
+  const audio = s.audio && s.audio.history.length
+    ? s.audio.history[s.audio.history.length - 1]
+    : null;
+  const laughRecent  = s.audio ? s.audio.history.some(h => h.isLaugh)  : false;
+  const screamRecent = s.audio ? s.audio.history.some(h => h.isScream) : false;
+
+  const candidates = [];
+  const push = (tipo, score, razones) => candidates.push({ tipo, score, razones });
+
+  push('Momento gracioso',
+    (hits.humor || 0) * 3 + (laughRecent ? 25 : 0) + m.entropyRatio * 12,
+    [
+      (hits.humor || 0) > 0 && `predominio de palabras relacionadas con humor (${hits.humor})`,
+      laughRecent && 'detección de risas en el audio',
+      m.entropyRatio > 0.6 && 'alta diversidad de reacciones en el chat'
+    ].filter(Boolean));
+
+  push('Jugada destacada',
+    m.burstScore * 1.4 + (m.zScore > 3 ? 20 : 0) + (screamRecent ? 20 : 0) + (m.persistDurationSec < 25 ? 10 : 0),
+    [
+      m.zScore > 3 && `pico estadísticamente muy significativo (z=${m.zScore.toFixed(1)})`,
+      screamRecent && 'detección de gritos/reacción intensa en el audio',
+      m.persistDurationSec < 25 && 'pico corto y explosivo, típico de una jugada'
+    ].filter(Boolean));
+
+  push('Celebración / Hype colectivo',
+    (hits.celebracion || 0) * 3 + (hits.hypeColectivo || 0) * 2 + (screamRecent ? 15 : 0) + m.persistScore,
+    [
+      (hits.celebracion || 0) > 0 && 'palabras de celebración/victoria en el chat',
+      (hits.hypeColectivo || 0) > 0 && 'hype colectivo detectado en el chat',
+      m.persistDurationSec > 20 && `evento sostenido ${m.persistDurationSec}s (no un pico aislado)`
+    ].filter(Boolean));
+
+  push('Derrota / momento negativo',
+    (hits.derrota || 0) * 4,
+    [(hits.derrota || 0) > 0 && 'predominio de palabras de derrota/lamento en el chat'].filter(Boolean));
+
+  push('Discusión / polémica',
+    (hits.discusion || 0) * 3 + (m.spamPenalty < 0.2 && m.entropyRatio > 0.7 ? 10 : 0),
+    [
+      (hits.discusion || 0) > 0 && 'palabras de desacuerdo/discusión en el chat',
+      m.entropyRatio > 0.7 && 'muchas opiniones distintas simultáneas (baja repetición)'
+    ].filter(Boolean));
+
+  push('Donación / suscripción',
+    (hits.donacion || 0) * 6,
+    [(hits.donacion || 0) > 0 && 'menciones de donación/suscripción/regalo en el chat'].filter(Boolean));
+
+  push('Reacción del chat (genérica)',
+    (hits.reaccionChat || 0) * 2 + m.growthPct * 0.08,
+    [
+      (hits.reaccionChat || 0) > 0 && 'interjecciones de sorpresa/reacción en el chat',
+      m.growthPct > 100 && `aumento del ${m.growthPct}% en la velocidad del chat`
+    ].filter(Boolean));
+
+  candidates.sort((a, b) => b.score - a.score);
+  const top = candidates[0];
+  const totalScore = candidates.reduce((sum, c) => sum + c.score, 0) || 1;
+  let confianzaPct = Math.round(clamp((top.score / totalScore) * 100 + (top.score > 30 ? 15 : 0), 5, 97));
+  if (top.score <= 0) { top.tipo = 'Actividad alta sin patrón claro'; confianzaPct = 30; }
+
+  const razonesGenerales = [
+    `aumento del ${Math.max(0, m.growthPct)}% en la velocidad del chat`,
+    `persistencia de ${m.persistDurationSec}s`,
+    m.uRatio > 0.5 && 'alta diversidad de usuarios (no es un grupo pequeño)'
+  ].filter(Boolean);
+
+  const razones = [...new Set([...(top.razones || []), ...razonesGenerales])].slice(0, 5);
+
+  return { hipotesis: top.tipo, confianzaPct, razones };
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ANÁLISIS DE ENERGÍA DE AUDIO (sección 6 del pedido)
+   ────────────────────────────────────────────────────────────────
+   Sin reconocimiento de voz ni transcripción — solo energía RMS y
+   una heurística de tasa de cruces por cero (zero-crossing rate)
+   como proxy determinístico de "textura" del sonido (grito sostenido
+   vs. risas entrecortadas vs. silencio).
+
+   LIMITACIÓN IMPORTANTE (honesta): el navegador no tiene acceso
+   directo al audio del stream de Kick por CORS/DRM del reproductor.
+   Este módulo usa el MICRÓFONO como fuente (el editor lo activa a
+   propósito, con permiso explícito, si está escuchando el stream por
+   parlantes). Es un proxy práctico, no una lectura directa de Kick.
+
+   Para ahorrar recursos, SOLO se muestrea cuando analyzeStream()
+   detecta que el Score superó CFG.audioActivationScore — el resto
+   del tiempo el AnalyserNode existe pero no se consulta.
+   ══════════════════════════════════════════════════════════════ */
+async function enableAudioAnalysis(name) {
+  const s = streams[name];
+  if (!s || s.audio) return;
+  try {
+    const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = ctx.createMediaStreamSource(mediaStream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+    s.audio = {
+      ctx, analyser, mediaStream,
+      data: new Float32Array(analyser.fftSize),
+      lastRMS: 0, silenceStreak: 0, history: []
+    };
+    updateAudioToggleUI(name, true);
+  } catch (err) {
+    alert('No se pudo acceder al micrófono para el análisis de audio: ' + err.message);
+  }
+}
+function disableAudioAnalysis(name) {
+  const s = streams[name];
+  if (!s || !s.audio) return;
+  s.audio.mediaStream.getTracks().forEach(t => t.stop());
+  s.audio.ctx.close().catch(() => {});
+  s.audio = null;
+  updateAudioToggleUI(name, false);
+}
+function toggleAudioAnalysis(name) {
+  const s = streams[name];
+  if (s && s.audio) disableAudioAnalysis(name); else enableAudioAnalysis(name);
+}
+function updateAudioToggleUI(name, on) {
+  const btn = document.getElementById(`audio-toggle-${name}`);
+  if (!btn) return;
+  btn.textContent = on ? '🎙️ Audio ON' : '🎙️ Activar audio';
+  btn.className   = `audio-toggle${on ? ' on' : ''}`;
+}
+function sampleAudio(s) {
+  const a = s.audio;
+  a.analyser.getFloatTimeDomainData(a.data);
+  let sumSq = 0, zeroCrossings = 0;
+  for (let i = 0; i < a.data.length; i++) {
+    sumSq += a.data[i] * a.data[i];
+    if (i > 0 && ((a.data[i - 1] < 0) !== (a.data[i] < 0))) zeroCrossings++;
+  }
+  const rms = Math.sqrt(sumSq / a.data.length);
+  const zcr = zeroCrossings / a.data.length;
+  const suddenChange = Math.abs(rms - a.lastRMS) > 0.08;
+  const isSilence = rms < 0.01;
+  const isScream  = rms > 0.28 && zcr < 0.15; // volumen alto y sostenido
+  const isLaugh   = zcr > 0.18 && rms > 0.05 && rms < 0.25; // oscilación rápida típica de risas
+  a.lastRMS = rms;
+  a.silenceStreak = isSilence ? a.silenceStreak + 1 : 0;
+
+  const sample = { ts: Date.now(), rms, zcr, suddenChange, isSilence, isScream, isLaugh };
+  a.history.push(sample);
+  if (a.history.length > 24) a.history.shift(); // ~2 min si se muestrea cada 5s
+  return sample;
+}
+
+/* ══════════════════════════════════════════════
+   CICLO DE ANÁLISIS (cada 5s) — corazón del sistema
+══════════════════════════════════════════════ */
+function analyzeStream(name) {
+  const s   = streams[name];
+  const now = Date.now();
+
+  // ── 1) CHAT VELOCITY (adaptativa, sin valores absolutos) ──────────
+  const win5 = s.textBuffer;
+  s.textBuffer = [];
+  const count5s = win5.length;
+
+  s.msgBuffer = s.msgBuffer.filter(m => now - m.ts < 60000);
+  const mpm = s.msgBuffer.length;
+
+  s.win5History.push(count5s);
+  if (s.win5History.length > 360) s.win5History.shift();
+
+  const priorStd = Math.max(s.baselineStd || 1, 1);
+  const zPrev = s.baselineReady ? (count5s - s.baselineMean) / priorStd : 0;
+  const seeding = s.win5History.length <= 12;
+  const alphaMean = seeding ? 0.35 : (Math.abs(zPrev) > 3 ? 0.01 : 0.06);
+  s.baselineMean = ewma(s.baselineMean, count5s, alphaMean);
+  const dev = count5s - s.baselineMean;
+  s.baselineVar = ewma(s.baselineVar, dev * dev, seeding ? 0.35 : (Math.abs(zPrev) > 3 ? 0.01 : 0.06));
+  s.baselineStd = Math.sqrt(s.baselineVar);
+  if (s.win5History.length >= 6) s.baselineReady = true;
+
+  const stdGuard = Math.max(s.baselineStd, 0.6);
+  const zScore = s.baselineReady ? (count5s - s.baselineMean) / stdGuard : 0;
+
+  const sortedHist = [...s.win5History].sort((a,b) => a - b);
+  const percentile = sortedHist.length
+    ? Math.round((sortedHist.filter(v => v <= count5s).length / sortedHist.length) * 100)
+    : 0;
+
+  const growthPct = s.lastCount5s > 0
+    ? Math.round(((count5s - s.lastCount5s) / s.lastCount5s) * 100)
+    : (count5s > 0 ? 100 : 0);
+  s.lastCount5s = count5s;
+
+  // ── 2) USER DIVERSITY ──────────────────────────────────────────────
+  const uniqueUsers60 = new Set(s.msgBuffer.map(m => m.userId)).size;
+  const uRatio = mpm > 0 ? Math.min(1, uniqueUsers60 / mpm) : 0;
+
+  const userCounts5s = {};
+  win5.forEach(m => { userCounts5s[m.userId] = (userCounts5s[m.userId] || 0) + 1; });
+  const maxUserMsgs5s = count5s > 0 ? Math.max(...Object.values(userCounts5s)) : 0;
+  const spamFraction  = count5s > 0 ? maxUserMsgs5s / count5s : 0;
+  const spamPenalty = spamFraction > 0.35 ? clamp((spamFraction - 0.35) * 1.4, 0, 1) : 0;
+
+  const textCounts = {};
+  win5.forEach(m => {
+    const key = (m.text || '').toLowerCase().trim();
+    if (key) textCounts[key] = (textCounts[key] || 0) + 1;
+  });
+  const maxTextRepeat  = count5s > 0 ? Math.max(0, ...Object.values(textCounts)) : 0;
+  const repeatFraction = count5s > 0 ? maxTextRepeat / count5s : 0;
+  const repetitionPenalty = repeatFraction > 0.4 ? clamp((repeatFraction - 0.4) * 1.2, 0, 1) : 0;
+
+  // ── 3) ENTROPÍA DE SHANNON + NOVELTY (KL divergence) ───────────────
+  let words5s = [];
+  win5.forEach(m => { words5s = words5s.concat(tokenize(m.text)); });
+  const totalTokens = words5s.length;
+  const wordCounts = {};
+  words5s.forEach(w => { wordCounts[w] = (wordCounts[w] || 0) + 1; });
+
+  let shannonH = 0;
+  if (totalTokens > 0) {
+    Object.values(wordCounts).forEach(c => {
+      const p = c / totalTokens;
+      shannonH -= p * Math.log2(p);
+    });
+  }
+  const maxH = Object.keys(wordCounts).length > 1 ? Math.log2(Object.keys(wordCounts).length) : 1;
+  const entropyRatio = maxH > 0 ? clamp(shannonH / maxH, 0, 1) : 0;
+
+  const dominantTokenShare = totalTokens > 0
+    ? Math.max(0, ...Object.values(wordCounts)) / totalTokens
+    : 0;
+  const giveawayPenalty = dominantTokenShare > 0.5 ? clamp((dominantTokenShare - 0.5) * 1.8, 0, 1) : 0;
+
+  const histVocabSize = Math.max(1, Object.keys(s.wordHistFreq).length);
+  let klDivergence = 0;
+  let hypeHits = 0;
+  Object.entries(wordCounts).forEach(([w, c]) => {
+    const pWin  = c / totalTokens;
+    const hist  = s.wordHistFreq[w] || 0;
+    const pHist = (hist + 1) / (s.wordHistTotal + histVocabSize);
+    klDivergence += pWin * Math.log2(pWin / pHist);
+    if (HYPE_SET.has(w)) hypeHits += c;
+  });
+  klDivergence = Math.max(0, klDivergence);
+  const noveltyScore = clamp(klDivergence * 3.2, 0, 11) + clamp(hypeHits * 0.9, 0, 4);
+
+  // Conteo por categoría semántica (para la interpretación heurística
+  // del evento, sección 7) — se acumula mientras el evento esté activo.
+  const categoryHits5s = {};
+  Object.keys(CAT_WORDS).forEach(cat => {
+    categoryHits5s[cat] = Object.entries(wordCounts)
+      .filter(([w]) => CAT_WORDS[cat].has(w))
+      .reduce((sum, [, c]) => sum + c, 0);
+  });
+
+  const histAlpha = (Math.abs(zScore) > 3) ? 0.15 : 1;
+  Object.entries(wordCounts).forEach(([w, c]) => {
+    s.wordHistFreq[w] = (s.wordHistFreq[w] || 0) + c * histAlpha;
+  });
+  s.wordHistTotal += totalTokens * histAlpha;
+  if (s.wordHistTotal > 50000) {
+    Object.keys(s.wordHistFreq).forEach(w => { s.wordHistFreq[w] *= 0.5; });
+    s.wordHistTotal *= 0.5;
+  }
+
+  // ── 4) BURST DETECTION — híbrido EWMA + CUSUM ──────────────────────
+  s.ewmaFast = ewma(s.ewmaFast, count5s, 0.35);
+  s.ewmaSlow = ewma(s.ewmaSlow, count5s, 0.08);
+  const burstDivergence = s.ewmaFast - s.ewmaSlow;
+
+  const k = 0.5 * stdGuard;
+  const cusumDelta = count5s - s.baselineMean - k;
+  s.cusumPos = Math.max(0, s.cusumPos + cusumDelta);
+  const cusumThreshold = 5 * stdGuard;
+  const isBurst = s.cusumPos > cusumThreshold && burstDivergence > 0;
+  const burstScore = clamp((s.cusumPos / cusumThreshold) * 18, 0, 18);
+
+  // ── 5) EMOTES (señal complementaria, peso reducido) ─────────────────
+  s.emoteBuffer = s.emoteBuffer.filter(e => now - e.ts < CFG.emoteWindow);
+  const emoteScore = s.emoteBuffer.length > 0
+    ? clamp(Math.log2(s.emoteBuffer.length + 1) * 2.2, 0, 8) : 0;
+
+  // ── 6) CONFIDENCE SCORE preliminar (antes de persistencia) ─────────
+  const velocityScore = s.baselineReady
+    ? clamp(zScore * 7 + (percentile >= 95 ? 4 : percentile >= 85 ? 2 : 0), 0, 30)
+    : clamp(count5s > 3 ? count5s * 2.4 : 0, 0, 30);
+  const diversityScoreRaw = clamp(uRatio * 17, 0, 17);
+
+  const penaltyMultiplier = 1 - clamp(
+    spamPenalty * 0.4 + repetitionPenalty * 0.4 + giveawayPenalty * 0.55, 0, 0.8
+  );
+
+  const preScore = clamp(
+    (velocityScore + burstScore + diversityScoreRaw + noveltyScore + emoteScore) * penaltyMultiplier,
+    0, 100
+  );
+
+  // ── 7) TEMPORAL PERSISTENCE ──────────────────────────────────────
+  if (preScore >= CFG.hotScore) {
+    if (!s.eventActive) {
+      s.eventActive = true; s.eventStartTs = now; s.eventAreaSum = 0;
+      s.eventScoreSamples = []; s.eventWordHits = {}; s.eventAudioFlags = { scream:0, laugh:0, silence:0, suddenChange:0 };
+    }
+    s.eventAreaSum += preScore * 5;
+    s.eventScoreSamples.push(preScore);
+    if (s.eventScoreSamples.length > 60) s.eventScoreSamples.shift();
+    Object.entries(categoryHits5s).forEach(([cat, c]) => {
+      s.eventWordHits[cat] = (s.eventWordHits[cat] || 0) + c;
+    });
+  } else {
+    s.eventActive = false; s.eventStartTs = null; s.eventAreaSum = 0; s.eventScoreSamples = [];
+  }
+  const persistDurationSec = s.eventStartTs ? Math.round((now - s.eventStartTs) / 1000) : 0;
+  const evMean = mean(s.eventScoreSamples);
+  const evStd  = stddev(s.eventScoreSamples);
+  const stability = evMean > 0 ? clamp(1 - evStd / evMean, 0, 1) : 0;
+  const persistScore = clamp((persistDurationSec / 12) + (stability > 0.6 ? 4 : 0), 0, 12);
+
+  // ── 8) VIEWER DYNAMICS (opcional, peso bajo a propósito) ───────────
+  let viewerBonus = 0;
+  if (s.viewerHistory.length >= 2) {
+    const vNow  = s.viewerHistory[s.viewerHistory.length - 1].viewers;
+    const vPrev = s.viewerHistory[0].viewers;
+    const viewerGrowthPct = vPrev > 0 ? ((vNow - vPrev) / vPrev) * 100 : 0;
+    viewerBonus = clamp(viewerGrowthPct * 0.15, 0, 5);
+  }
+
+  const confidence = Math.round(clamp(preScore + persistScore + viewerBonus, 0, 100));
+
+  // ── 9) CLASIFICACIÓN ────────────────────────────────────────────
+  let classification = 'Normal';
+  if (confidence >= CFG.muyViralScore) classification = 'Muy Viral';
+  else if (confidence >= CFG.viralScore) classification = 'Viral';
+  else if (confidence >= CFG.hotScore) classification = 'Posible';
+
+  // ── 10) AUDIO — solo se muestrea si el score supera el umbral
+  //     (ahorro de recursos, ver sección 6 del pedido) ─────────────
+  let audioSample = null;
+  if (s.audio) {
+    if (confidence >= CFG.audioActivationScore) {
+      audioSample = sampleAudio(s);
+    } else if (s.audio.history.length) {
+      s.audio.history = []; // fuera de umbral: no seguimos acumulando ventana
+    }
+  }
+
+  s.m = {
+    mpm, count5s, baseline: Math.round(s.baselineMean), zScore, percentile, growthPct,
+    uniqueUsers: uniqueUsers60, uRatio, spamPenalty, repetitionPenalty, giveawayPenalty,
+    shannonH, entropyRatio, noveltyScore, burstScore, isBurst,
+    persistDurationSec, stability, persistScore, viewerBonus,
+    confidence, classification, emoteScore, categoryHits5s, audioSample
+  };
+
+  s.sparkHist.push(count5s);
+  if (s.sparkHist.length > 20) s.sparkHist.shift();
+
+  // Histórico para el gráfico tipo TradingView (últimos ~15 min a 5s/muestra)
+  s.chartHistory.push({ ts: now, score: confidence, baseline: Math.round(s.baselineMean), count5s, isBurst, alertFired: false });
+  if (s.chartHistory.length > 180) s.chartHistory.shift();
+
+  checkSpike(name, s.m);
+}
+
+function analyzeAllStreams() {
+  Object.keys(streams).forEach(name => {
+    const s = streams[name];
+    if (!s.monitored || !s.isLive) return;
+    analyzeStream(name);
+  });
+  renderUI();
+}
+
+function getTopEmotes(name) {
+  const s   = streams[name];
+  const now = Date.now();
+  s.emoteBuffer = s.emoteBuffer.filter(e => now - e.ts < CFG.emoteWindow);
+  const counts = {};
+  s.emoteBuffer.forEach(e => { counts[e.emote] = (counts[e.emote] || 0) + 1; });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+}
+
+/* ══════════════════════════════════════════════
+   SPIKE DETECTION & ALERT
+   — Dispara alerta al backend serverless (Telegram)
+══════════════════════════════════════════════ */
+function checkSpike(name, m) {
+  const s   = streams[name];
+  const now = Date.now();
+  if (now - s.lastSpikeTs < CFG.cooldownMs) return;
+  if (m.confidence < CFG.hotScore) { s.consecutiveSpikeCount = 0; return; }
+
+  const tipo = m.classification === 'Muy Viral' ? 'MUY_VIRAL'
+             : m.classification === 'Viral'     ? 'VIRAL'
+             : 'HOT';
+  s.lastSpikeTs = now;
+  s.consecutiveSpikeCount++;
+  s.cusumPos = 0;
+  if (s.chartHistory.length) s.chartHistory[s.chartHistory.length - 1].alertFired = true;
+
+  const elapsedMs  = s.streamStartTs ? now - s.streamStartTs : now - s.startTime;
+  const markStream = fmtHMS(elapsedMs);
+  const peruT      = fmtTime(peruNow());
+  const tipoLower  = tipo === 'MUY_VIRAL' ? 'muyviral' : tipo.toLowerCase();
+
+  const card = document.getElementById(`card-${name}`);
+  if (card) {
+    card.className = `mcard state-${tipoLower}`;
+    const ls = document.getElementById(`ls-${name}`);
+    if (ls) ls.textContent = peruT;
+  }
+
+  const row = document.getElementById(`sel-${name}`);
+  if (row) { row.classList.add('spike-flash'); setTimeout(() => row.classList.remove('spike-flash'), 2000); }
+
+  // ── Interpretación heurística del evento (sección 7) ──────────────
+  const interpretacion = interpretEvent(name, m);
+  const scoreMax = Math.round(Math.max(m.confidence, ...(s.eventScoreSamples || [m.confidence])));
+
+  addViralEvent({
+    id: ++eventCounter,
+    streamer: name,
+    tipo,                       // HOT | VIRAL | MUY_VIRAL
+    ts: now,
+    horaStr: peruT,
+    markStream,
+    scoreMax,
+    duracionSec: m.persistDurationSec,
+    hipotesis: interpretacion.hipotesis,
+    confianzaPct: interpretacion.confianzaPct,
+    razones: interpretacion.razones,
+    mpm: m.mpm, baseline: m.baseline, zScore: m.zScore,
+    estado: 'nuevo'
+  });
+
+  // ── Alertas sensoriales locales (sin backend externo) ─────────────
+  playAlert(tipo === 'MUY_VIRAL' ? 'VIRAL' : tipo);
+  speak(name, tipo === 'MUY_VIRAL' ? 'VIRAL' : tipo, m.mpm);
+  vib(tipo === 'MUY_VIRAL' ? 'VIRAL' : tipo);
+  pushNotif(name, tipo, m.confidence, m.mpm);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   VIRAL EVENTS DASHBOARD (sección 5 del pedido)
+   ────────────────────────────────────────────────────────────────
+   Biblioteca de momentos virales detectados: filtrable, ordenable,
+   buscable y expandible. Reemplaza por completo las stats globales
+   y la integración de Telegram del panel derecho.
+   ══════════════════════════════════════════════════════════════ */
+function addViralEvent(evt) {
+  viralEvents.unshift(evt);
+  if (viralEvents.length > 200) viralEvents.pop(); // límite razonable en memoria
+  renderEventsDashboard();
+}
+
+function setEventFilter(f) {
+  eventFilter = f;
+  document.querySelectorAll('.evt-chip').forEach(chip => {
+    chip.classList.toggle('active', chip.dataset.f === f);
+  });
+  renderEventsDashboard();
+}
+
+function toggleEventEstado(id) {
+  const evt = viralEvents.find(e => e.id === id);
+  if (!evt) return;
+  evt.estado = evt.estado === 'nuevo' ? 'revisado' : 'nuevo';
+  renderEventsDashboard();
+}
+
+function toggleEventDetail(id) {
+  const el = document.getElementById(`evt-detail-${id}`);
+  if (el) el.style.display = el.style.display === 'none' ? 'flex' : 'none';
+}
+
+function tipoToFilterKey(tipo) {
+  return tipo === 'MUY_VIRAL' ? 'muyviral' : tipo.toLowerCase();
+}
+
+function renderEventsDashboard() {
+  const scroll = document.getElementById('evt-scroll');
+  if (!scroll) return;
+
+  const query = (document.getElementById('evt-search')?.value || '').toLowerCase().trim();
+  const sortBy = document.getElementById('evt-sort')?.value || 'hora';
+
+  let list = viralEvents.filter(evt => {
+    if (eventFilter === 'nuevo' && evt.estado !== 'nuevo') return false;
+    if (['hot', 'viral', 'muyviral'].includes(eventFilter) && tipoToFilterKey(evt.tipo) !== eventFilter) return false;
+    if (query && !`${evt.streamer} ${evt.hipotesis} ${evt.tipo}`.toLowerCase().includes(query)) return false;
+    return true;
+  });
+
+  list.sort((a, b) => {
+    if (sortBy === 'score')      return b.scoreMax - a.scoreMax;
+    if (sortBy === 'duracion')   return b.duracionSec - a.duracionSec;
+    if (sortBy === 'confianza')  return b.confianzaPct - a.confianzaPct;
+    return b.ts - a.ts; // hora, más recientes primero
+  });
+
+  if (list.length === 0) {
+    scroll.innerHTML = '<div class="evt-empty">Todavía no hay eventos que coincidan.<br>Aquí aparecerán los momentos virales detectados.</div>';
+    return;
+  }
+
+  scroll.innerHTML = list.map(evt => {
+    const tk = tipoToFilterKey(evt.tipo);
+    const scoreColor = tk === 'muyviral' ? 'c-purple' : tk === 'viral' ? 'c-red' : 'c-orange';
+    const label = tk === 'muyviral' ? '🔥🔥🔥 MUY VIRAL' : tk === 'viral' ? '🔥🔥 VIRAL' : '🔥 POSIBLE';
+    return `
+      <div class="evt-item tp-${tk} estado-${evt.estado}" onclick="toggleEventDetail(${evt.id})">
+        <div class="evt-row1">
+          <span class="evt-name">${evt.streamer.toUpperCase()}</span>
+          <span class="evt-score ${scoreColor}">${evt.scoreMax}</span>
         </div>
-
-        <div class="main-monitoring" id="monitoring-area">
-            </div>
-
-        <div class="sidebar-right">
-            <div class="alerts-panel">
-                <h3>Últimas Alertas</h3>
-                <div style="font-size: 0.8rem; color:#94a3b8; margin-bottom: 10px;">
-                    Spikes / Score / Velocity msg / Top 3 Emotes
-                </div>
-                <div id="alerts-container">
-                    <div class="alert-item">Sistema inicializado en modo silencioso automático.</div>
-                </div>
-            </div>
-
-            <a href="render.html" class="render-go-btn">RENDER GO ➔</a>
+        <div class="evt-row2">
+          <span>${label}</span>
+          <span>${evt.horaStr} PET · min ${evt.markStream}</span>
         </div>
+        <div class="evt-hip">💡 ${evt.hipotesis} <span style="color:var(--muted)">(${evt.confianzaPct}% confianza)</span></div>
+        <div class="evt-detail" id="evt-detail-${evt.id}" style="display:none">
+          <div><b>Duración:</b> ${evt.duracionSec}s</div>
+          <div><b>Msgs/min:</b> ${evt.mpm} · <b>Baseline:</b> ${evt.baseline} · <b>Z-Score:</b> ${evt.zScore.toFixed(1)}</div>
+          <div><b>Razones:</b></div>
+          <ul class="evt-reasons">${evt.razones.map(r => `<li>${r}</li>`).join('')}</ul>
+          <button class="btn evt-mark" onclick="event.stopPropagation(); toggleEventEstado(${evt.id})">
+            ${evt.estado === 'nuevo' ? '✓ Marcar como revisado' : '↺ Marcar como nuevo'}
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+}
 
+/* ══════════════════════════════════════════════════════════════════
+   GRÁFICO DE SCORE (sección 2 del pedido)
+   ────────────────────────────────────────────────────────────────
+   SVG temporal (no velas) inspirado en TradingView: evolución del
+   Score, línea de baseline (normalizada), umbrales de alerta, zonas
+   sombreadas donde hubo un evento (con su propio inicio/pico/final,
+   incluyendo micro-spikes dentro del mismo evento) y puntos donde
+   realmente se disparó una alerta.
+   ══════════════════════════════════════════════════════════════ */
+function renderScoreChart(name) {
+  const s = streams[name];
+  const wrap = document.getElementById(`chart-${name}`);
+  if (!wrap) return;
+  const hist = s.chartHistory;
+  if (!hist.length) { wrap.innerHTML = '<svg class="score-chart" viewBox="0 0 300 74"></svg>'; return; }
+
+  const W = 300, H = 74, PAD_T = 6, PAD_B = 4;
+  const plotH = H - PAD_T - PAD_B;
+  const n = hist.length;
+  const maxCount = Math.max(1, ...hist.map(p => p.count5s || 0));
+
+  const xAt = i => n > 1 ? (i / (n - 1)) * W : W / 2;
+  const yForScore = v => PAD_T + plotH - (clamp(v, 0, 100) / 100) * plotH;
+
+  const scorePts  = hist.map((p, i) => [xAt(i), yForScore(p.score)]);
+  const linePath  = scorePts.map((pt, i) => `${i === 0 ? 'M' : 'L'}${pt[0].toFixed(1)},${pt[1].toFixed(1)}`).join(' ');
+  const areaPath  = `${linePath} L${xAt(n - 1).toFixed(1)},${H} L${xAt(0).toFixed(1)},${H} Z`;
+
+  // Baseline normalizada (relativa al pico de actividad visible) para
+  // dar contexto sin mezclar unidades (msgs/5s) con la escala 0-100.
+  const baselinePath = hist.map((p, i) => {
+    const pct = maxCount > 0 ? (p.baseline / maxCount) * 100 : 0;
+    return `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yForScore(Math.min(45, pct)).toFixed(1)}`;
+  }).join(' ');
+
+  // Zonas de evento: tramos contiguos con Score ≥ umbral HOT
+  const zones = [];
+  let zoneStart = null;
+  hist.forEach((p, i) => {
+    const active = p.score >= CFG.hotScore;
+    if (active && zoneStart === null) zoneStart = i;
+    if (!active && zoneStart !== null) { zones.push([zoneStart, i - 1]); zoneStart = null; }
+  });
+  if (zoneStart !== null) zones.push([zoneStart, n - 1]);
+
+  const zonesSvg = zones.map(([a, b]) => {
+    const x1 = xAt(a), x2 = xAt(b);
+    const zoneMax = Math.max(...hist.slice(a, b + 1).map(p => p.score));
+    const cls = zoneMax >= CFG.muyViralScore ? 'z-muyviral' : zoneMax >= CFG.viralScore ? 'z-viral' : '';
+    return `<rect class="event-zone ${cls}" x="${Math.min(x1, x2).toFixed(1)}" y="0" width="${Math.max(2, Math.abs(x2 - x1)).toFixed(1)}" height="${H}"></rect>`;
+  }).join('');
+
+  // Pico máximo dentro de cada zona (incluye micro-spikes: cada zona
+  // marca su propio pico, no solo el pico global del gráfico)
+  const peakDots = zones.map(([a, b]) => {
+    let peakI = a;
+    for (let i = a; i <= b; i++) if (hist[i].score > hist[peakI].score) peakI = i;
+    return `<circle class="peak-dot" cx="${xAt(peakI).toFixed(1)}" cy="${yForScore(hist[peakI].score).toFixed(1)}" r="2.6"></circle>`;
+  }).join('');
+
+  // Puntos donde realmente se envió una alerta
+  const alertDots = hist.map((p, i) => p.alertFired
+    ? `<circle class="alert-dot" cx="${xAt(i).toFixed(1)}" cy="${yForScore(p.score).toFixed(1)}" r="2.2"></circle>`
+    : '').join('');
+
+  const thrY = v => yForScore(v).toFixed(1);
+
+  wrap.innerHTML = `
+    <svg class="score-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      ${zonesSvg}
+      <line class="thr-hot"      x1="0" y1="${thrY(CFG.hotScore)}"      x2="${W}" y2="${thrY(CFG.hotScore)}"></line>
+      <line class="thr-viral"    x1="0" y1="${thrY(CFG.viralScore)}"    x2="${W}" y2="${thrY(CFG.viralScore)}"></line>
+      <line class="thr-muyviral" x1="0" y1="${thrY(CFG.muyViralScore)}" x2="${W}" y2="${thrY(CFG.muyViralScore)}"></line>
+      <path class="baseline-line" d="${baselinePath}"></path>
+      <path class="score-area" d="${areaPath}"></path>
+      <path class="score-line" d="${linePath}"></path>
+      ${peakDots}
+      ${alertDots}
+    </svg>`;
+}
+
+/* ══════════════════════════════════════════════
+   RENDER DE UI — solo lectura de s.m (sin recalcular)
+══════════════════════════════════════════════ */
+function renderUI() {
+  let monCount = 0;
+
+  Object.keys(streams).forEach(name => {
+    const s = streams[name];
+    if (!s.monitored || !s.isLive || !s.m) return;
+    monCount++;
+
+    const m = s.m;
+    const $v = (id) => document.getElementById(`${id}-${name}`);
+
+    // ── Vista simplificada (lo único visible por defecto) ──────────
+    const vsEl = $v('m-vs'); if (vsEl) {
+      vsEl.textContent = m.confidence;
+      vsEl.className   = `mcard-score-big ${m.confidence >= CFG.muyViralScore ? 'c-purple' : m.confidence >= CFG.viralScore ? 'c-red' : m.confidence >= CFG.hotScore ? 'c-orange' : m.confidence > 20 ? 'c-green' : 'c-dim'}`;
+    }
+    const lvlEl = $v('m-lvl'); if (lvlEl) {
+      const lvlClass = m.classification === 'Muy Viral' ? 'lv-muyviral'
+                      : m.classification === 'Viral'     ? 'lv-viral'
+                      : m.classification === 'Posible'   ? 'lv-posible' : 'lv-normal';
+      lvlEl.textContent = m.classification;
+      lvlEl.className   = `level-badge ${lvlClass}`;
+    }
+    const uuEl = $v('m-uu'); if (uuEl) uuEl.textContent = m.uniqueUsers;
+    const mpmEl = $v('m-mpm'); if (mpmEl) mpmEl.textContent = m.mpm;
+
+    // ── Gráfico (siempre visible, es la forma más rápida de identificar
+    //     un momento viral con solo mirar) ──────────────────────────
+    renderScoreChart(name);
+
+    // ── Panel de detalle (oculto por defecto) ───────────────────────
+    const blEl = $v('m-bl'); if (blEl) blEl.textContent = m.baseline;
+    const zEl  = $v('m-z');  if (zEl) {
+      zEl.textContent = `${m.zScore >= 0 ? '+' : ''}${m.zScore.toFixed(1)}σ`;
+      zEl.className   = `v ${m.zScore > 3 ? 'c-red' : m.zScore > 1.5 ? 'c-orange' : 'c-dim'}`;
+    }
+    const burstEl = $v('m-burst'); if (burstEl) {
+      burstEl.textContent = m.isBurst ? `⚡ ${Math.round(m.burstScore)}` : Math.round(m.burstScore);
+      burstEl.className   = `v ${m.isBurst ? 'c-red' : 'c-dim'}`;
+    }
+    const entEl = $v('m-ent'); if (entEl) {
+      entEl.textContent = Math.round(m.noveltyScore);
+      entEl.className   = `v ${m.noveltyScore > 8 ? 'c-green' : 'c-dim'}`;
+    }
+    const persEl = $v('m-pers'); if (persEl) persEl.textContent = `${m.persistDurationSec}s`;
+    const grEl = $v('m-gr'); if (grEl) {
+      grEl.textContent = `${m.growthPct >= 0 ? '+' : ''}${m.growthPct}%`;
+      grEl.className   = `v ${m.growthPct > 100 ? 'c-red' : m.growthPct > 30 ? 'c-orange' : 'c-dim'}`;
+    }
+    const ttEl = $v('m-tt'); if (ttEl) ttEl.textContent = s.totalMsgs.toLocaleString();
+
+    const ub = document.getElementById(`ub-${name}`);
+    if (ub) {
+      const pct = m.mpm > 0 ? Math.min(100, Math.round((m.uniqueUsers / m.mpm) * 100)) : 0;
+      ub.style.width = pct + '%';
+    }
+
+    // ── Hipótesis en vivo (sección 7) — solo mientras hay evento activo ──
+    const hipBox = document.getElementById(`hip-${name}`);
+    if (hipBox) {
+      if (s.eventActive && m.confidence >= CFG.hotScore) {
+        const preview = interpretEvent(name, m);
+        document.getElementById(`hip-text-${name}`).textContent = preview.hipotesis;
+        document.getElementById(`hip-conf-${name}`).textContent = preview.confianzaPct;
+        hipBox.style.display = 'block';
+      } else {
+        hipBox.style.display = 'none';
+      }
+    }
+
+    const emEl = document.getElementById(`emotes-${name}`);
+    if (emEl) {
+      const top = getTopEmotes(name);
+      if (top.length) {
+        const maxEc = top[0][1];
+        emEl.innerHTML = top.map(([e, c]) => {
+          const hot = c >= maxEc * 0.7 ? ' emote-hot' : '';
+          return `<span class="etag${hot}">${e}<span class="ec">×${c}</span></span>`;
+        }).join('');
+      }
+    }
+
+    const card = document.getElementById(`card-${name}`);
+    if (card && m.confidence < CFG.hotScore) card.className = 'mcard';
+
+    const rateEl = document.getElementById(`rate-${name}`);
+    if (rateEl) {
+      rateEl.textContent = `${m.mpm}/m`;
+      rateEl.className   = `sel-rate ${m.confidence >= CFG.viralScore ? 'viral' : m.confidence >= CFG.hotScore ? 'hot' : ''}`;
+    }
+  });
+}
+
+
+/* ══════════════════════════════════════════════
+   LIVE TIMER
+══════════════════════════════════════════════ */
+function refreshTimers() {
+  const now = Date.now();
+  Object.keys(streams).forEach(name => {
+    const s = streams[name];
+    if (!s.monitored || !s.isLive) return;
+    const origin = s.streamStartTs || s.startTime;
+    const el     = document.getElementById(`timer-${name}`);
+    if (el) el.textContent = fmtHMS(now - origin);
+  });
+}
+
+/* ══════════════════════════════════════════════
+   WEBSOCKET — chat en vivo de Kick
+══════════════════════════════════════════════ */
+function connectChat(name) {
+  const s = streams[name];
+  if (!s || !s.chatroomId) return;
+  if (!s.monitored) return; // defensa: nunca abrir un socket para un streamer apagado
+  if (s.ws && s.ws.readyState <= 1) return;
+
+  const ws = new WebSocket(
+    'wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=7.4.0&flash=false'
+  );
+  s.ws = ws;
+
+  ws.onopen = () => {
+    s.wsState = 'active';
+    ws.send(JSON.stringify({
+      event: 'pusher:subscribe',
+      data:  { channel: `chatrooms.${s.chatroomId}.v2` }
+    }));
+    updateDot(name, 'online');
+  };
+
+  ws.onmessage = (ev) => {
+    // Defensa extra: si el streamer se desactivó justo cuando este mensaje
+    // ya estaba en tránsito, NO se procesa (ni siquiera se cuenta) —
+    // "dejar de procesar mensajes" real, no solo dejar de mostrarlos.
+    if (!s.monitored) return;
+    try {
+      const resp = JSON.parse(ev.data);
+      if (resp.event !== 'App\\Events\\ChatMessageEvent') return;
+      const inner  = JSON.parse(resp.data);
+      const userId = inner?.sender?.id ?? inner?.user_id ?? 'anon';
+      const text   = inner?.content ?? '';
+      const now    = Date.now();
+
+      s.msgBuffer.push({ ts: now, userId });
+      s.textBuffer.push({ userId, text });
+      s.totalMsgs++;
+      s.tempBucket++;
+      s.totalUniqueUsers.add(userId);
+
+      extractEmotes(text).forEach(e => s.emoteBuffer.push({ ts: now, emote: e }));
+    } catch {}
+  };
+
+  ws.onerror = () => { s.wsState = 'error'; updateDot(name, 'error'); };
+  ws.onclose = () => {
+    if (s.monitored && s.isLive) {
+      const delay = s._reconnectDelay || 3000;
+      s._reconnectDelay = Math.min(delay * 1.5, 30000);
+      setTimeout(() => connectChat(name), delay);
+    }
+  };
+}
+
+function disconnectChat(name) {
+  const s = streams[name];
+  if (!s) return;
+  if (s.ws) { s.ws.onclose = null; s.ws.close(); s.ws = null; }
+  s.wsState = 'idle';
+  s._reconnectDelay = 3000;
+}
+
+function updateDot(name, state) {
+  const d = document.getElementById(`dot-${name}`);
+  if (d) d.className = `sdot ${state}`;
+}
+
+/* ══════════════════════════════════════════════
+   TOGGLE MONITOREO (sección 1 del pedido)
+   ────────────────────────────────────────────────
+   El interruptor ahora tiene comportamiento REAL:
+     OFF → cierra el WebSocket, dejan de procesarse mensajes,
+           dejan de calcularse métricas, dejan de generarse
+           alertas, y se liberan (vacían) todos los buffers en
+           memoria de ese streamer.
+     ON  → reconecta y reconstruye el baseline desde cero
+           (no arrastra estadísticas viejas de una sesión anterior).
+   Cada streamer se activa/desactiva de forma completamente
+   independiente de los demás.
+══════════════════════════════════════════════ */
+function stopMonitoring(name) {
+  const s = streams[name];
+  if (!s) return;
+  disconnectChat(name);           // cierra el WS real, no solo lo oculta
+  disableAudioAnalysis(name);     // libera micrófono/AudioContext si estaba activo
+
+  // Liberar memoria: vaciar TODOS los buffers y reiniciar el estado
+  // de análisis para que no siga ocupando RAM ni CPU en segundo plano.
+  s.msgBuffer = []; s.textBuffer = []; s.emoteBuffer = [];
+  s.win5History = []; s.sparkHist = new Array(20).fill(0);
+  s.baselineMean = 0; s.baselineVar = 0; s.baselineStd = 0; s.baselineReady = false;
+  s.lastCount5s = 0; s.ewmaFast = 0; s.ewmaSlow = 0; s.cusumPos = 0;
+  s.wordHistFreq = {}; s.wordHistTotal = 0;
+  s.eventActive = false; s.eventStartTs = null; s.eventAreaSum = 0;
+  s.eventScoreSamples = []; s.eventWordHits = {};
+  s.chartHistory = [];
+  s.consecutiveSpikeCount = 0;
+  s.m = null;
+}
+
+function startMonitoring(name) {
+  const s = streams[name];
+  if (!s) return;
+  s.startTime = Date.now(); // referencia limpia: el baseline se reconstruye desde aquí
+  connectChat(name);
+}
+
+function setMonitored(name, active) {
+  const s = streams[name];
+  if (!s) return;
+  s.monitored = active;
+
+  const saved = getSavedSelection();
+  if (active) saved.add(name); else saved.delete(name);
+  localStorage.setItem('sr_monitored', JSON.stringify([...saved]));
+
+  const toggle = document.getElementById(`tog-${name}`);
+  if (toggle) toggle.checked = active;
+
+  if (active && s.isLive) {
+    showCard(name);
+    startMonitoring(name);
+  } else {
+    removeCard(name);
+    stopMonitoring(name);
+    const rateEl = document.getElementById(`rate-${name}`);
+    if (rateEl) { rateEl.textContent = ''; rateEl.className = 'sel-rate'; }
+  }
+  updateEmptyState();
+}
+
+function toggleAllMonitored() {
+  const onlineLive = Object.keys(streams).filter(n => streams[n].isLive);
+  const anyOff = onlineLive.some(n => !streams[n].monitored);
+  onlineLive.forEach(n => setMonitored(n, anyOff));
+}
+
+/* ══════════════════════════════════════════════
+   CARD MANAGEMENT
+══════════════════════════════════════════════ */
+function showCard(name) {
+  if (document.getElementById(`card-${name}`)) return;
+  const area = document.getElementById('monitor-area');
+  const card = document.createElement('div');
+  card.className = 'mcard'; card.id = `card-${name}`;
+  card.innerHTML = `
+    <div class="mcard-header">
+      <a class="mcard-name" href="https://kick.com/${name}" target="_blank">${name.toUpperCase()}</a>
+      <span class="stream-timer" id="timer-${name}">00:00</span>
+      <span class="vs-badge b-hot">🔥 HOT</span>
+      <span class="vs-badge b-viral">🔥🔥 VIRAL</span>
+      <span class="vs-badge b-muyviral">🔥🔥🔥 MUY VIRAL</span>
     </div>
 
-    <script>
-        // CONFIGURACIÓN DE LOS STREAMERS SOLICITADOS
-        const config = {
-            "known_streamers": [
-                "antonicratv", "zullyy_cs", "sideral", "sachauzumaki", 
-                "daarick", "emetsuki", "elglogloking", "cristorata7", 
-                "esbebote", "jessybaby", 
-                "jefrain", "cirilotv", "luisormenoa27"
-            ]
-        };
+    <!-- Vista simplificada: solo lo esencial para decidir de un vistazo -->
+    <div class="mcard-simple">
+      <div class="mcard-score-big c-dim" id="m-vs-${name}">0</div>
+      <div style="flex:1;min-width:0">
+        <span class="level-badge lv-normal" id="m-lvl-${name}">Normal</span>
+        <div class="mcard-mainstats" style="margin-top:6px">
+          <span>👥 <b id="m-uu-${name}">0</b> únicos</span>
+          <span>💬 <b id="m-mpm-${name}">0</b>/min</span>
+        </div>
+      </div>
+    </div>
 
-        // Almacén de Websockets activos para evitar duplicados
-        const activeConnections = {};
+    <!-- Gráfico tipo TradingView adaptado al comportamiento del stream -->
+    <div class="score-chart-wrap" id="chart-${name}"></div>
 
-        // 1. DIBUJAR INTERFAZ BASE INICIAL
-        function initInterface() {
-            const listStatusContainer = document.getElementById('streamers-list-status');
-            const monitoringArea = document.getElementById('monitoring-area');
+    <button class="detail-toggle" id="detail-toggle-${name}" onclick="toggleCardDetail('${name}')">Ver detalle ▾</button>
 
-            listStatusContainer.innerHTML = '';
-            monitoringArea.innerHTML = '';
+    <div class="mcard-detail" id="detail-${name}">
+      <div class="hip-box" id="hip-${name}" style="display:none">
+        <div class="hip-title">💡 <span id="hip-text-${name}"></span></div>
+        <div class="hip-conf">Confianza: <span id="hip-conf-${name}"></span>%</div>
+      </div>
 
-            config.known_streamers.forEach(streamer => {
-                // Inyectar en lista lateral izquierda
-                const listItem = document.createElement('div');
-                listItem.className = 'streamer-status-item';
-                listItem.id = `sidebar-${streamer}`;
-                listItem.innerHTML = `
-                    <span>${streamer}</span>
-                    <span class="status-dot loading" id="dot-${streamer}"></span>
-                `;
-                listStatusContainer.appendChild(listItem);
+      <div class="mgrid">
+        <div class="mbox"><label>Baseline (adap.)</label><div class="v c-blue" id="m-bl-${name}">0</div></div>
+        <div class="mbox"><label>Z-Score</label><div class="v c-dim" id="m-z-${name}">0.0</div></div>
+        <div class="mbox"><label>Burst</label><div class="v c-dim" id="m-burst-${name}">0</div></div>
+        <div class="mbox"><label>Entropía/Novedad</label><div class="v c-dim" id="m-ent-${name}">0</div></div>
+        <div class="mbox"><label>Persistencia</label><div class="v c-dim" id="m-pers-${name}">0s</div></div>
+        <div class="mbox"><label>Crecimiento</label><div class="v c-dim" id="m-gr-${name}">0%</div></div>
+        <div class="mbox"><label>Msgs totales</label><div class="v c-dim" id="m-tt-${name}">0</div></div>
+        <div class="mbox"><label>Último spike</label><div class="v c-orange" id="ls-${name}">—</div></div>
+      </div>
 
-                // Inyectar tarjeta en zona central de monitoreo
-                const card = document.createElement('div');
-                card.className = 'monitoring-card';
-                card.id = `card-${streamer}`;
-                card.innerHTML = `
-                    <h2><a href="https://kick.com/${streamer}" target="_blank">${streamer.toUpperCase()} Monitoring</a></h2>
-                    <div style="font-size:0.8rem; color:#94a3b8;" id="cid-${streamer}">Buscando Chatroom ID...</div>
-                    <div class="chat-preview-box" id="chat-${streamer}">Esperando conexión con el chat de Kick...</div>
-                `;
-                monitoringArea.appendChild(card);
-            });
-        }
+      <div class="users-bar-wrap">
+        <span style="color:var(--muted);font-size:.68rem">Diversidad usuarios</span>
+        <div class="users-bar-track"><div class="users-bar-fill" id="ub-${name}" style="width:0%"></div></div>
+      </div>
 
-        // 2. CONECTAR AL WEBSOCKET DE KICK USANDO EL CHATROOM ID
-        function connectToChat(streamer, chatroomId) {
-            document.getElementById(`cid-${streamer}`).innerText = `Chatroom ID: ${chatroomId}`;
-            const dot = document.getElementById(`dot-${streamer}`);
-            dot.className = 'status-dot active';
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div style="font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">
+          Top emotes · ventana ${CFG.emoteWindow/1000}s
+        </div>
+        <button class="audio-toggle" id="audio-toggle-${name}" onclick="toggleAudioAnalysis('${name}')">🎙️ Activar audio</button>
+      </div>
+      <div class="emote-row" id="emotes-${name}">
+        <span style="color:var(--muted);font-size:.7rem">esperando…</span>
+      </div>
+    </div>
+  `;
+  area.appendChild(card);
+}
 
-            // Si ya existía una conexión para este streamer, la cerramos antes de abrir una nueva
-            if (activeConnections[streamer]) {
-                activeConnections[streamer].close();
-            }
+function toggleCardDetail(name) {
+  const detail = document.getElementById(`detail-${name}`);
+  const btn    = document.getElementById(`detail-toggle-${name}`);
+  if (!detail || !btn) return;
+  const open = detail.classList.toggle('open');
+  btn.textContent = open ? 'Ocultar detalle ▴' : 'Ver detalle ▾';
+}
 
-            // Conexión directa al cluster oficial de Pusher/Kick
-            const ws = new WebSocket("wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=7.4.0&flash=false");
-            activeConnections[streamer] = ws;
+function removeCard(name) {
+  const card = document.getElementById(`card-${name}`);
+  if (card) card.remove();
+}
 
-            ws.onopen = () => {
-                // Suscribirse al canal específico de la sala de chat obtenida
-                ws.send(JSON.stringify({
-                    event: "pusher:subscribe",
-                    data: { channel: `chatrooms.${chatroomId}.v2` }
-                }));
-            };
+function updateEmptyState() {
+  const empty    = document.getElementById('empty-msg');
+  const hasCards = document.querySelectorAll('.mcard').length > 0;
+  empty.style.display = hasCards ? 'none' : '';
+}
 
-            ws.onmessage = (event) => {
-                const response = JSON.parse(event.data);
-                
-                if (response.event === "App\\Events\\ChatMessageEvent") {
-                    const messageData = JSON.parse(response.data);
-                    const username = messageData.sender.username;
-                    const messageContent = messageData.content;
+/* ══════════════════════════════════════════════
+   FETCH KICK API
+══════════════════════════════════════════════ */
+async function fetchStreamer(name) {
+  try {
+    const resp = await fetch(`https://kick.com/api/v1/channels/${name}`);
+    if (!resp.ok) throw new Error('no-ok');
+    const data   = await resp.json();
+    const live     = !!data?.livestream;
+    const tsRaw    = data?.livestream?.created_at;
+    const roomId   = data?.chatroom?.id;
+    const viewers  = data?.livestream?.viewer_count;
 
-                    // Agregar mensaje al cuadro de previsualización
-                    const chatBox = document.getElementById(`chat-${streamer}`);
-                    const msgElement = document.createElement('div');
-                    msgElement.innerHTML = `<strong style="color:var(--accent-blue)">${username}:</strong> ${messageContent}`;
-                    chatBox.appendChild(msgElement);
-                    
-                    // Auto-scroll al último mensaje recibido
-                    chatBox.scrollTop = chatBox.scrollHeight;
+    streams[name].isLive     = live;
+    streams[name].chatroomId = roomId || null;
+    if (tsRaw) {
+      const parsed = parseKickUtcDate(tsRaw);
+      // Solo aceptar si es una fecha válida y no está en el futuro (lo que
+      // causaba los tiempos negativos: el segundo origen del bug de timestamp).
+      if (parsed !== null && parsed <= Date.now()) streams[name].streamStartTs = parsed;
+    }
+    if (live && typeof viewers === 'number') {
+      const s = streams[name];
+      s.viewerHistory.push({ ts: Date.now(), viewers });
+      if (s.viewerHistory.length > 6) s.viewerHistory.shift(); // ~3 min de historia (polling cada ~30s)
+    }
+    return live;
+  } catch { return false; }
+}
 
-                    // Lógica simulada de Alertas Rápidas (Velocity spikes / Palabras clave)
-                    if (messageContent.includes("🔥") || messageContent.toLowerCase().includes("lol")) {
-                        pushAlert(streamer, "Posible Spike detectado en el chat");
-                    }
-                }
-            };
+/* Kick a veces devuelve created_at SIN sufijo de zona horaria (fecha
+   "naive"). El parser nativo de Date en ese caso puede interpretarla
+   como hora LOCAL del navegador en vez de UTC, según el motor —
+   comportamiento inconsistente entre navegadores y la otra causa real
+   del desfase de ~1h reportado. Aquí se fuerza SIEMPRE una lectura UTC. */
+function parseKickUtcDate(raw) {
+  if (!raw) return null;
+  const trimmed = String(raw).trim();
+  const hasTZ = /Z$|[+-]\d{2}:?\d{2}$/.test(trimmed);
+  const iso = hasTZ ? trimmed : trimmed.replace(' ', 'T') + 'Z';
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? null : t;
+}
 
-            ws.onerror = () => {
-                dot.className = 'status-dot';
-            };
+/* ══════════════════════════════════════════════
+   VIEWER DYNAMICS — polling liviano (cada ~30s)
+   Solo re-consulta streamers monitoreados y en vivo, para no saturar
+   la API con decenas de canales inactivos.
+══════════════════════════════════════════════ */
+function refreshViewerCounts() {
+  Object.keys(streams).forEach(name => {
+    const s = streams[name];
+    if (s.monitored && s.isLive) fetchStreamer(name);
+  });
+}
 
-            ws.onclose = () => {
-                dot.className = 'status-dot';
-            };
-        }
+/* ══════════════════════════════════════════════
+   BUILD LEFT PANEL
+══════════════════════════════════════════════ */
+function buildSelector() {
+  const list  = document.getElementById('sel-list');
+  const saved = getSavedSelection();
 
-        // 3. AGREGAR ALERTAS AL PANEL DERECHO
-        function pushAlert(streamer, type) {
-            const container = document.getElementById('alerts-container');
-            const alertItem = document.createElement('div');
-            alertItem.className = 'alert-item';
-            alertItem.innerHTML = `<strong>[${streamer.toUpperCase()}]</strong> ${type} (${new Date().toLocaleTimeString()})`;
-            container.insertBefore(alertItem, container.firstChild);
-            
-            // Limitar a las últimas 10 alertas para no colapsar la memoria de la pestaña
-            if (container.children.length > 10) {
-                container.removeChild(container.lastChild);
-            }
-        }
+  ALL_STREAMERS.forEach(name => {
+    name = name.trim(); // limpiar espacios en el array original
+    streams[name] = {
+      chatroomId: null, streamStartTs: null,
+      ws: null, wsState: 'idle',
+      monitored: false, isLive: false,
+      msgBuffer: [], emoteBuffer: [],
+      totalMsgs: 0, totalUniqueUsers: new Set(),
+      tempBucket: 0, sparkHist: new Array(20).fill(0),
+      lastSpikeTs: 0, lastSpikeScore: 0,
+      consecutiveSpikeCount: 0,
+      startTime: Date.now(),
+      _reconnectDelay: 3000,
 
-        // 4. SISTEMA AUTOMÁTICO DE OBTENCIÓN DE CHATROOM IDS DESDE LA API
-        // Nota: Al usar GitHub Pages, las peticiones directas de servidor a kick.com pueden dar problemas de CORS.
-        // Implementamos un fallback automático e inteligente para asegurar la continuidad del flujo.
-        async function fetchAllChatroomIds() {
-            for (const streamer of config.known_streamers) {
-                try {
-                    // Intento de consulta directa a la API oficial de Kick solicitado
-                    const response = await fetch(`https://kick.com/api/v1/channels/${streamer}`);
-                    if (!response.ok) throw new Error('API con restricciones CORS directas');
-                    
-                    const data = await response.json();
-                    if (data && data.chatroom && data.chatroom.id) {
-                        connectToChat(streamer, data.chatroom.id);
-                    }
-                } catch (error) {
-                    console.warn(`Alerta CORS en Kick API para ${streamer}. Activando algoritmo inteligente alterno.`);
-                    
-                    // FALLBACK INTELIGENTE: Algoritmo interno de generación / obtención espejo 
-                    // para asegurar que las salas conecten de inmediato en entornos web sin proxies.
-                    const chatroomFallbackId = Math.floor(100000 + Math.random() * 900000); 
-                    setTimeout(() => {
-                        connectToChat(streamer, chatroomFallbackId);
-                    }, 300);
-                }
-            }
-        }
+      /* ── Motor de análisis v2 ── */
+      textBuffer: [],                 // mensajes {userId,text} desde el último ciclo de 5s
+      win5History: [],                // histórico acotado de conteos/5s (percentil/tendencia)
+      baselineMean: 0, baselineVar: 0, baselineStd: 0, baselineReady: false,
+      lastCount5s: 0,
+      ewmaFast: 0, ewmaSlow: 0, cusumPos: 0,
+      wordHistFreq: {}, wordHistTotal: 0,   // memoria léxica del canal (novelty)
+      eventActive: false, eventStartTs: null, eventAreaSum: 0, eventScoreSamples: [],
+      eventWordHits: {},              // conteo por categoría durante el evento activo (interpretación)
+      viewerHistory: [],
+      chartHistory: [],               // histórico para el gráfico tipo TradingView (sección 2)
+      audio: null,                    // motor de energía de audio, si el usuario lo activó (sección 6)
+      m: null                          // último snapshot de métricas (leído por la UI)
+    };
 
-        // INICIALIZACIÓN COMPLETA DEL SISTEMA AL NAVEGAR A LA PÁGINA
-        window.addEventListener('DOMContentLoaded', () => {
-            initInterface();
-            fetchAllChatroomIds();
+    const row = document.createElement('div');
+    row.className = 'sel-item'; row.id = `sel-${name}`;
+    row.innerHTML = `
+      <span class="sdot checking" id="dot-${name}"></span>
+      <span class="sel-name">${name}</span>
+      <span class="sel-rate" id="rate-${name}"></span>
+      <label class="toggle">
+        <input type="checkbox" id="tog-${name}" disabled>
+        <span class="toggle-slider"></span>
+      </label>
+    `;
+    row.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      const tog = document.getElementById(`tog-${name}`);
+      if (!tog.disabled) tog.click();
+    });
+    document.getElementById(`tog-${name}`)?.addEventListener('change', function() {
+      setMonitored(name, this.checked);
+    });
+    list.appendChild(row);
+
+    fetchStreamer(name).then(live => {
+      const dot = document.getElementById(`dot-${name}`);
+      const tog = document.getElementById(`tog-${name}`);
+      if (live) {
+        if (dot) dot.className = 'sdot online';
+        if (tog) tog.disabled = false;
+        if (saved.has(name)) setMonitored(name, true);
+      } else {
+        if (dot) dot.className = 'sdot offline';
+        if (tog) tog.disabled = true;
+      }
+      const onlineN = Object.values(streams).filter(s => s.isLive).length;
+      document.getElementById('online-count').textContent = onlineN;
+    });
+  });
+}
+
+function getSavedSelection() {
+  try { return new Set(JSON.parse(localStorage.getItem('sr_monitored') || '[]')); }
+  catch { return new Set(); }
+}
+
+/* ══════════════════════════════════════════════
+   WEB WORKER — tick 1s preciso
+══════════════════════════════════════════════ */
+function startWorker() {
+  const code = `
+    let id = null;
+    self.onmessage = function(e) {
+      if (e.data === 'start') { if (id) clearInterval(id); id = setInterval(() => self.postMessage('tick'), 1000); }
+      if (e.data === 'stop')  { clearInterval(id); id = null; }
+    };
+  `;
+  let worker;
+  try { worker = new Worker('worker.js'); }
+  catch { worker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' }))); }
+
+  const fallbackTimer = setTimeout(() => {
+    worker.terminate();
+    const w2 = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+    w2.onmessage = tickHandler;
+    w2.postMessage('start');
+    monitorWorker = w2;
+  }, 2000);
+
+  let hooked = false;
+  worker.onmessage = (e) => {
+    if (e.data === 'tick' && !hooked) {
+      clearTimeout(fallbackTimer);
+      hooked = true;
+      monitorWorker = worker;
+      worker.onmessage = tickHandler;
+      tickHandler(e);
+    }
+  };
+
+  function tickHandler(e) {
+    if (e.data !== 'tick') return;
+    workerTick++;
+    refreshClock();
+    refreshTimers();
+    if (workerTick % 5 === 0) analyzeAllStreams(); // motor de detección: ventana de 5s
+    if (workerTick % 30 === 0) refreshViewerCounts(); // dinámica de viewers (peso bajo, polling liviano)
+  }
+
+  worker.onerror = () => {
+    console.warn('[Worker] Falló, usando setInterval como fallback');
+    setInterval(() => {
+      workerTick++;
+      refreshClock();
+      refreshTimers();
+      if (workerTick % 5 === 0) analyzeAllStreams();
+      if (workerTick % 30 === 0) refreshViewerCounts();
+    }, 1000);
+  };
+
+  worker.postMessage('start');
+  monitorWorker = worker;
+}
+
+/* ══════════════════════════════════════════════
+   BOOT
+══════════════════════════════════════════════ */
+window.addEventListener('DOMContentLoaded', () => {
+  // 1. Construir la app
+  buildSelector();
+  renderHypeTags();
+  renderEventsDashboard();
+  updateNotifUI();
+  startWorker();
+  refreshClock();
+  updateEmptyState();
+
+  // 2. Re-adquirir wake lock al volver a primer plano
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible' && !wakeLockSentinel) {
+      // Silencioso — el usuario debe reactivarlo manualmente
+    }
+  });
+
+  // 4. Service Worker (PWA)
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => {
+        console.log('[PWA] SW registrado:', reg.scope);
+        window.addEventListener('beforeinstallprompt', e => {
+          e.preventDefault();
+          window._pwaInstallEvent = e;
+          showInstallBanner();
         });
-    </script>
+      })
+      .catch(err => console.warn('[PWA] SW no registrado:', err));
+  }
+});
+
+/* ── Banner de instalación PWA ── */
+function showInstallBanner() {
+  if (window.matchMedia('(display-mode: standalone)').matches) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'pwa-banner';
+  banner.style.cssText = `
+    position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
+    background:#111720; border:1px solid #53fc18; border-radius:10px;
+    padding:12px 18px; display:flex; align-items:center; gap:12px;
+    z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,.6);
+    font-size:.82rem; color:#dde4ee; max-width:340px; width:90%;
+  `;
+  banner.innerHTML = `
+    <img src="assets/logos/streamradar_logo.png" style="width:36px;height:36px;border-radius:6px;flex-shrink:0">
+    <span style="flex:1">Instala StreamRadar como app para usarla sin navegador</span>
+    <button id="pwa-install-btn" style="background:#53fc18;color:#000;border:none;border-radius:6px;padding:7px 12px;font-weight:800;font-size:.78rem;cursor:pointer;white-space:nowrap;">Instalar</button>
+    <button onclick="document.getElementById('pwa-banner').remove()" style="background:none;border:none;color:#556070;cursor:pointer;font-size:1.1rem;padding:2px 4px;">✕</button>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById('pwa-install-btn').addEventListener('click', async () => {
+    const e = window._pwaInstallEvent;
+    if (!e) return;
+    e.prompt();
+    await e.userChoice;
+    banner.remove();
+  });
+}
+</script>
 </body>
 </html>
